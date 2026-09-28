@@ -1,0 +1,41 @@
+# --- secrets: this repo is PUBLIC ---
+.env
+.env.local
+*.key
+tokens.json
+.spotify-tokens.json
+
+# --- personal listening data ---
+# The scrobble corpus and captured DJ sessions are personal data and never
+# leave this machine. Anonymized fixtures under fixtures/ ARE committed.
+data/
+*.scrobbles.jsonl
+*.session.jsonl
+
+# --- derived artifacts ---
+# space.json is committed only if it provably contains no raw history.
+space.json
+out/
+reports/
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# --- node (phase 4) ---
+node_modules/
+
+# --- agent scratch ---
+.superpowers/
+.claude/
+
+# --- os ---
+.DS_Store
+Thumbs.db
