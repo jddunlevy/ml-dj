@@ -1,0 +1,12 @@
+{
+  "toptags": {
+    "@attr": { "artist": "New Order" },
+    "tag": [
+      { "name": "new wave", "count": 100, "url": "https://example.invalid/1" },
+      { "name": "post-punk", "count": 88, "url": "https://example.invalid/2" },
+      { "name": "synthpop", "count": 74, "url": "https://example.invalid/3" },
+      { "name": "80s", "count": 61, "url": "https://example.invalid/4" },
+      { "name": "electronic", "count": 45, "url": "https://example.invalid/5" }
+    ]
+  }
+}

@@ -4,7 +4,14 @@ from pathlib import Path
 import pytest
 
 from fakes import FakeClock, FakeTransport
-from mldj.lastfm import LastfmClient, LastfmError, top_tags, top_tags_cached
+from mldj.lastfm import (
+    LastfmClient,
+    LastfmError,
+    artist_top_tags,
+    artist_top_tags_cached,
+    top_tags,
+    top_tags_cached,
+)
 from mldj.transport import Response
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -110,3 +117,41 @@ def test_top_tags_cached_hits_the_network_once(tmp_path):
     second = top_tags_cached(c, "New Order", "Blue Monday", cache_dir=tmp_path)
     assert first == second
     assert len(c.transport.requests) == 1
+
+
+ARTISTTAGS = (FIXTURES / "lastfm-artisttags.json").read_bytes()
+
+
+def test_artist_top_tags_parses_and_orders_by_count():
+    assert artist_top_tags(client([Response(200, ARTISTTAGS)]), "New Order") == [
+        ("new wave", 100),
+        ("post-punk", 88),
+        ("synthpop", 74),
+        ("80s", 61),
+        ("electronic", 45),
+    ]
+
+
+def test_artist_top_tags_handles_an_untagged_artist():
+    body = json.dumps({"toptags": {"tag": []}}).encode()
+    assert artist_top_tags(client([Response(200, body)]), "Nobody At All") == []
+
+
+def test_artist_top_tags_cached_hits_the_network_once(tmp_path):
+    c = client([Response(200, ARTISTTAGS)])  # a second call would exhaust the script
+    first = artist_top_tags_cached(c, "New Order", cache_dir=tmp_path)
+    second = artist_top_tags_cached(c, "New Order", cache_dir=tmp_path)
+    assert first == second
+    assert len(c.transport.requests) == 1
+
+
+def test_artist_and_track_caches_do_not_collide(tmp_path):
+    # An artist and a track share a cache filename; only the separate directories keep
+    # them apart, so that separation is asserted rather than assumed.
+    tracks, artists = tmp_path / "tags", tmp_path / "artist-tags"
+    artist_top_tags_cached(client([Response(200, ARTISTTAGS)]), "New Order", cache_dir=artists)
+    top_tags_cached(client([Response(200, TOPTAGS)]), "New Order", "", cache_dir=tracks)
+    assert artist_top_tags_cached(
+        client([]), "New Order", cache_dir=artists
+    ) == [("new wave", 100), ("post-punk", 88), ("synthpop", 74), ("80s", 61), ("electronic", 45)]
+    assert top_tags_cached(client([]), "New Order", "", cache_dir=tracks)[0] == ("new wave", 100)

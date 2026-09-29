@@ -16,6 +16,7 @@ from mldj.transport import Transport, retry_after_ms
 
 API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 TAGS_DIR = Path("data/tags")  # gitignored
+ARTIST_TAGS_DIR = Path("data/artist-tags")  # gitignored; separate dir, see _cache_path
 
 
 class LastfmError(RuntimeError):
@@ -95,18 +96,64 @@ def top_tags(client: LastfmClient, artist: str, title: str) -> list[tuple[str, i
 
 
 def _cache_path(cache_dir: Path, artist: str, title: str) -> Path:
+    """Cache filename for an (artist, title) pair.
+
+    An artist alone is keyed as (artist, "") - so an artist and a track by that artist
+    with an empty title collide on filename, and only the separate cache directories keep
+    them apart. That is deliberate and asserted by a test; do not merge the directories.
+    """
     digest = hashlib.sha1(f"{artist}\t{title}".encode()).hexdigest()[:16]
     return cache_dir / f"{digest}.json"
+
+
+def _read_cached(path: Path) -> list[tuple[str, int]] | None:
+    if not path.exists():
+        return None
+    return [(name, count) for name, count in json.loads(path.read_text(encoding="utf-8"))]
+
+
+def _write_cached(path: Path, tags: list[tuple[str, int]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(tags), encoding="utf-8")
 
 
 def top_tags_cached(
     client: LastfmClient, artist: str, title: str, cache_dir: Path = TAGS_DIR
 ) -> list[tuple[str, int]]:
-    """Disk-cached top_tags. Tag pulls are the slow part of Task 10; cache them."""
+    """Disk-cached top_tags. A corpus-wide pull is thousands of calls; cache them."""
     path = _cache_path(cache_dir, artist, title)
-    if path.exists():
-        return [(name, count) for name, count in json.loads(path.read_text(encoding="utf-8"))]
+    cached = _read_cached(path)
+    if cached is not None:
+        return cached
     tags = top_tags(client, artist, title)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(tags), encoding="utf-8")
+    _write_cached(path, tags)
+    return tags
+
+
+def artist_top_tags(client: LastfmClient, artist: str) -> list[tuple[str, int]]:
+    """An artist's top tags, highest count first.
+
+    Artist-level coverage is around 95% against 24.5% for tracks, so this is the backoff
+    tier that gives most of the corpus any tags at all. It is much coarser than track
+    tags, which is why anything inheriting from here records its provenance.
+    """
+    payload = client.call("artist.getTopTags", artist=artist, autocorrect="1")
+    rows = [
+        (str(row.get("name", "")), int(row.get("count") or 0))
+        for row in _tag_rows(payload)
+        if isinstance(row, dict) and row.get("name")
+    ]
+    return sorted(rows, key=lambda pair: -pair[1])
+
+
+def artist_top_tags_cached(
+    client: LastfmClient, artist: str, cache_dir: Path = ARTIST_TAGS_DIR
+) -> list[tuple[str, int]]:
+    """Disk-cached artist_top_tags, keyed as (artist, "") in its own directory."""
+    path = _cache_path(cache_dir, artist, "")
+    cached = _read_cached(path)
+    if cached is not None:
+        return cached
+    tags = artist_top_tags(client, artist)
+    _write_cached(path, tags)
     return tags
