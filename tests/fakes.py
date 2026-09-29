@@ -1,8 +1,46 @@
-"""Test doubles for the two injected boundaries. No test may use the real ones."""
+"""Test doubles for the two injected boundaries. No test may use the real ones.
+
+make_play is here too: the measure/ tests all need Play records, and Play carries eleven
+fields of which each test cares about two or three.
+"""
 
 from collections.abc import Mapping
 
+from mldj.skips import Play
 from mldj.transport import Response
+
+MINUTE_MS = 60_000
+
+
+def make_play(
+    artist: str = "Paper Lanterns",
+    title: str = "Ceiling Fan",
+    outcome: str = "completed",
+    *,
+    started_at_ms: int = 0,
+    session: str = "s1",
+    label: str = "dj",
+    duration_ms: int = 200_000,
+    listened_ms: int | None = None,
+    track_id: str | None = None,
+    reason: str = "",
+) -> Play:
+    """A Play with sensible defaults, so a test states only what it is about."""
+    if listened_ms is None:
+        listened_ms = duration_ms if outcome == "completed" else 5_000
+    return Play(
+        track_id=track_id if track_id is not None else f"{artist}:{title}",
+        title=title,
+        artist=artist,
+        duration_ms=duration_ms,
+        started_at_ms=started_at_ms,
+        ended_at_ms=started_at_ms + listened_ms,
+        listened_ms=listened_ms,
+        outcome=outcome,
+        session=session,
+        label=label,
+        reason=reason or ("ambiguous" if outcome == "unknown" else ""),
+    )
 
 
 class FakeClock:
