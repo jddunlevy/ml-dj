@@ -139,3 +139,71 @@ def test_vocabulary_records_the_most_common_original_spelling_for_display():
 def test_vocabulary_length_matches_its_terms():
     vocab = build_vocabulary({"rock": 9, "pop": 9}, min_count=5)
     assert len(vocab) == 2
+
+
+# --- artist spread: a tag attested by one artist teaches nothing -----------------------
+
+
+def test_tag_artist_spread_counts_distinct_artists_per_tag():
+    from mldj.match import track_key
+    from mldj.space.vocab import tag_artist_spread
+
+    reps = {
+        track_key("Alpha", "one"): ("Alpha", "one"),
+        track_key("Alpha", "two"): ("Alpha", "two"),
+        track_key("Beta", "three"): ("Beta", "three"),
+    }
+    track_tags = {
+        track_key("Alpha", "one"): [("mellow", 9), ("alphacore", 9)],
+        track_key("Alpha", "two"): [("alphacore", 9)],
+        track_key("Beta", "three"): [("mellow", 9)],
+    }
+    spread = tag_artist_spread(track_tags, reps)
+    assert spread[canonical_tag("mellow")] == 2
+    assert spread[canonical_tag("alphacore")] == 1  # two tracks, but one artist
+
+
+def test_min_artists_drops_a_tag_only_one_artist_carries():
+    # Last.fm users tag tracks with artist names, and such a tag co-occurs with exactly
+    # that artist's tracks - perfect specificity, no generalizable meaning, and it would
+    # dominate the SVD. The same is true of a genre only one artist attests.
+    spread = {canonical_tag("mellow"): 5, canonical_tag("weezer"): 1}
+    counts = {"mellow": 40, "weezer": 40}
+    vocab = build_vocabulary(counts, min_count=5, artist_spread=spread, min_artists=2)
+    assert canonical_tag("mellow") in vocab.index
+    assert canonical_tag("weezer") not in vocab.index
+    assert vocab.dropped_by_spread == 1
+
+
+def test_min_artists_of_one_keeps_everything():
+    spread = {canonical_tag("mellow"): 5, canonical_tag("weezer"): 1}
+    vocab = build_vocabulary(
+        {"mellow": 40, "weezer": 40}, min_count=5, artist_spread=spread, min_artists=1
+    )
+    assert len(vocab) == 2
+    assert vocab.dropped_by_spread == 0
+
+
+def test_spread_filter_is_skipped_when_no_spread_is_given():
+    vocab = build_vocabulary({"mellow": 40, "weezer": 40}, min_count=5, min_artists=3)
+    assert len(vocab) == 2  # nothing to filter on, so nothing is dropped
+    assert vocab.dropped_by_spread == 0
+
+
+def test_a_tag_missing_from_the_spread_map_is_treated_as_unattested():
+    vocab = build_vocabulary(
+        {"mellow": 40}, min_count=5, artist_spread={}, min_artists=2
+    )
+    assert len(vocab) == 0
+    assert vocab.dropped_by_spread == 1
+
+
+def test_the_two_drop_reasons_are_reported_separately():
+    spread = {canonical_tag("mellow"): 5, canonical_tag("weezer"): 1, canonical_tag("rare"): 9}
+    vocab = build_vocabulary(
+        {"mellow": 40, "weezer": 40, "rare": 1}, min_count=5,
+        artist_spread=spread, min_artists=2,
+    )
+    assert vocab.dropped == 1  # rare, below min_count
+    assert vocab.dropped_by_spread == 1  # weezer, one artist
+    assert len(vocab) == 1

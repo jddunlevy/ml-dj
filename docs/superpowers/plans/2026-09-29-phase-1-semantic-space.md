@@ -320,3 +320,34 @@ indie + indie rock        197 items
 ```
 
 Those are the synonym-and-hypernym end of the spectrum, which is the half **Phase 2 must distinguish from antonymy**. The pairs now need their opposite: two tags with high distributional similarity that almost never share an item. Nothing in the top-co-occurrence list is a candidate, which is the point — Phase 2's signal lives where these counts are *low* while SVD similarity is *high*, and the gold set built in Task 8 is what will name those pairs.
+
+### Task 5 — PPMI, and a vocabulary defect it exposed
+
+PPMI itself is exact against hand-computed arithmetic. Running it on the real matrix, however, showed the *vocabulary* was poisoned. Top cosine similarities on PPMI rows were:
+
+```
+1.000  jamaican             ~ roots reggae
+1.000  bjork                ~ icelandic
+1.000  Bob Marley           ~ jamaican
+0.911  my chemical romance  ~ mcr
+0.813  hole                 ~ Courtney Love
+```
+
+Last.fm users tag tracks with **artist names**, and such a tag co-occurs with exactly that artist's tracks. Perfect specificity gives it a cosine of 1.0 against the artist's other identifying tags, and it carries no semantic content whatever — so these terms would have eaten the leading SVD components in Task 6.
+
+**Fix: `min_artists`, a distributional filter rather than a name blocklist.** A tag carried by only one artist is dropped. The justification is stronger than "these are artist names": *a tag attested by a single artist carries no generalizable distributional evidence, whatever it denotes.* You cannot learn what `art punk` means from one artist's tracks either. Counting artists also catches what string matching would miss — abbreviations (`mcr`), band members (`Courtney Love`), and scene labels naming one act.
+
+Measured at `min_count=3`: **63 of 508 terms (12.4%) are single-artist**; `<3 artists` would be 101 (19.9%). After filtering at `min_artists=2`:
+
+```
+0.755  danceable            ~ melodic
+0.721  Hip-Hop              ~ rap
+0.695  latin                ~ Reggaeton
+0.680  bubblegum bass       ~ hyperpop
+0.677  experimental hip hop ~ industrial hip-hop
+0.634  alternative metal    ~ Nu Metal
+```
+
+Real semantic relations, and `Hip-Hop ~ rap` is a genuine synonym pair — the exact signal Task 8's gold set will grade. **`min_artists` belongs in the Task 8 sweep alongside `min_count` and `rank`.** One residue survives at `min_artists=2`: `swedish ~ abba` at 0.751, because two artists carry the `abba` tag (covers or compilations), which suggests trying 3.
+
+**Note also that PPMI kept 100% of cells (11,022 of 11,022).** With binary presence over sparse data, almost every observed co-occurrence beats chance, so clamping prunes nothing and `shift` is the only lever that would — worth including in the sweep for that reason rather than for SGNS equivalence.
