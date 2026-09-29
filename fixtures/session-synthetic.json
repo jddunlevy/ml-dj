@@ -1,0 +1,31 @@
+{
+ "session": "synthetic-20260924T101500Z",
+ "label": "dj",
+ "events": [
+  {"ts": 1758707700000, "artist": "Artist A", "title": "Track 1",
+   "tags": ["indierock", "alternative"], "outcome": "completed", "earliness": 0.0, "novel": true,
+   "duration_ms": 214000, "listened_ms": 214000},
+  {"ts": 1758707915000, "artist": "Artist B", "title": "Track 2",
+   "tags": ["indierock", "dreampop"], "outcome": "completed", "earliness": 0.0, "novel": true,
+   "duration_ms": 245000, "listened_ms": 245000},
+  {"ts": 1758708161000, "artist": "Artist C", "title": "Track 3",
+   "tags": ["dance", "electronic", "electropop"], "outcome": "skipped",
+   "earliness": 0.97, "novel": true,
+   "duration_ms": 198000, "listened_ms": 6000},
+  {"ts": 1758708168000, "artist": "Artist D", "title": "Track 4",
+   "tags": ["dreampop", "shoegaze"], "outcome": "completed", "earliness": 0.0, "novel": true,
+   "duration_ms": 268000, "listened_ms": 268000},
+  {"ts": 1758708437000, "artist": "Artist E", "title": "Track 5",
+   "tags": ["hiphop", "rap"], "outcome": "skipped", "earliness": 0.91, "novel": true,
+   "duration_ms": 187000, "listened_ms": 17000},
+  {"ts": 1758708455000, "artist": "Artist F", "title": "Track 6",
+   "tags": ["dreampop", "ethereal"], "outcome": "completed", "earliness": 0.0, "novel": true,
+   "duration_ms": 231000, "listened_ms": 231000},
+  {"ts": 1758708687000, "artist": "Artist G", "title": "Track 7",
+   "tags": ["shoegaze", "noisepop"], "outcome": "unknown", "earliness": 0.0, "novel": true,
+   "duration_ms": 0, "listened_ms": 0},
+  {"ts": 1758708900000, "artist": "Artist H", "title": "Track 8",
+   "tags": ["dreampop", "artpop"], "outcome": "completed", "earliness": 0.0, "novel": true,
+   "duration_ms": 252000, "listened_ms": 252000}
+ ]
+}
