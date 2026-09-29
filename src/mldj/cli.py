@@ -9,8 +9,11 @@ from collections.abc import Sequence
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from mldj import capture
+
     parser = argparse.ArgumentParser(prog="mldj", description="ml-dj Phase 0 baseline tools")
-    parser.add_subparsers(dest="command", metavar="<command>")
+    subparsers = parser.add_subparsers(dest="command", metavar="<command>")
+    capture.register(subparsers)
     return parser
 
 
