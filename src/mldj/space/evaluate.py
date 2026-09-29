@@ -214,17 +214,26 @@ def _run(args: argparse.Namespace) -> int:
         results.sort(key=lambda pair: -pair[1].synonym_minus_unrelated)
         print(
             f"{'min_count':>9} {'min_art':>8} {'min_reach':>10} {'artists':>8} {'rank':>5} "
-            f"{'vocab':>6} {'syn-unrel':>10} {'rank_ok':>8} {'anton':>7}"
+            f"{'scored':>7} {'missing':>8} {'syn-unrel':>10} {'rank_ok':>8} {'anton':>7}"
         )
         for point, result in results:
-            vocab = result.by_label["synonym"].scored
+            # scored/missing, not vocabulary size: a configuration can win the separation
+            # column purely by dropping the gold pairs it would have failed, so the number
+            # of pairs a score is based on has to sit next to the score.
+            scored = sum(s.scored for s in result.by_label.values())
             print(
                 f"{point['min_count']:>9} {point['min_artists']:>8} {point['min_reach']:>10} "
-                f"{str(point['include_artists']):>8} {point['rank']:>5} {vocab:>6} "
+                f"{str(point['include_artists']):>8} {point['rank']:>5} {scored:>7} "
+                f"{len(result.missing_terms):>8} "
                 f"{result.synonym_minus_unrelated:>10.3f} "
                 f"{'PASS' if result.ranking_correct else 'FAIL':>8} "
                 f"{result.antonym_mean:>7.3f}"
             )
+        print()
+        print(
+            "A higher syn-unrel with fewer `scored` pairs is not an improvement - it is "
+            "the same space judged on an easier subset."
+        )
         return 0
 
     space = build_space(
