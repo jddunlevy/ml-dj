@@ -1,0 +1,22 @@
+{"t":1000,"type":"session_start","label":"dj","interval_ms":30000,"session":"20250930T010000Z"}
+{"t":1000,"type":"poll","kind":"track","id":"a1","title":"Ceiling Fan","artist":"Paper Lanterns","duration_ms":180000,"progress_ms":0,"is_playing":true,"fetched_at":1000}
+{"t":31000,"type":"poll","kind":"track","id":"a1","title":"Ceiling Fan","artist":"Paper Lanterns","duration_ms":180000,"progress_ms":30000,"is_playing":true,"fetched_at":31000}
+{"t":91000,"type":"poll","kind":"track","id":"a1","title":"Ceiling Fan","artist":"Paper Lanterns","duration_ms":180000,"progress_ms":90000,"is_playing":true,"fetched_at":91000}
+{"t":151000,"type":"poll","kind":"track","id":"a1","title":"Ceiling Fan","artist":"Paper Lanterns","duration_ms":180000,"progress_ms":150000,"is_playing":true,"fetched_at":151000}
+{"t":178000,"type":"poll","kind":"track","id":"a1","title":"Ceiling Fan","artist":"Paper Lanterns","duration_ms":180000,"progress_ms":177000,"is_playing":true,"fetched_at":178000}
+{"t":181000,"type":"poll","kind":"track","id":"b2","title":"Static Bloom","artist":"Odell","duration_ms":240000,"progress_ms":0,"is_playing":true,"fetched_at":181000}
+{"t":186000,"type":"poll","kind":"track","id":"b2","title":"Static Bloom","artist":"Odell","duration_ms":240000,"progress_ms":5000,"is_playing":true,"fetched_at":186000}
+{"t":187000,"type":"poll","kind":"track","id":"c3","title":"Low Ceiling","artist":"Odell","duration_ms":200000,"progress_ms":0,"is_playing":true,"fetched_at":187000}
+{"t":217000,"type":"poll","kind":"track","id":"c3","title":"Low Ceiling","artist":"Odell","duration_ms":200000,"progress_ms":30000,"is_playing":true,"fetched_at":217000}
+{"t":277000,"type":"poll","kind":"track","id":"c3","title":"Low Ceiling","artist":"Odell","duration_ms":200000,"progress_ms":90000,"is_playing":true,"fetched_at":277000}
+{"t":337000,"type":"poll","kind":"track","id":"c3","title":"Low Ceiling","artist":"Odell","duration_ms":200000,"progress_ms":150000,"is_playing":true,"fetched_at":337000}
+{"t":338000,"type":"poll","kind":"track","id":"d4","title":"Half Light","artist":"Wire Season","duration_ms":190000,"progress_ms":0,"is_playing":true,"fetched_at":338000}
+{"t":368000,"type":"poll","kind":"track","id":"d4","title":"Half Light","artist":"Wire Season","duration_ms":190000,"progress_ms":30000,"is_playing":true,"fetched_at":368000}
+{"t":398000,"type":"poll","kind":"ad","id":"ad","title":"","artist":"","duration_ms":0,"progress_ms":0,"is_playing":true,"fetched_at":398000}
+{"t":428000,"type":"poll","kind":"track","id":"e5","title":"Paper Cut","artist":"Wire Season","duration_ms":210000,"progress_ms":0,"is_playing":true,"fetched_at":428000}
+{"t":458000,"type":"poll","kind":"track","id":"e5","title":"Paper Cut","artist":"Wire Season","duration_ms":210000,"progress_ms":30000,"is_playing":true,"fetched_at":458000}
+{"t":488000,"type":"gap","reason":"rate-limited","retry_ms":30000}
+{"t":518000,"type":"poll","kind":"track","id":"e5","title":"Paper Cut","artist":"Wire Season","duration_ms":210000,"progress_ms":90000,"is_playing":true,"fetched_at":518000}
+{"t":548000,"type":"poll","kind":"track","id":"f6","title":"Blue Monday - 2016 Remaster","artist":"New Order","duration_ms":270000,"progress_ms":0,"is_playing":true,"fetched_at":548000}
+{"t":578000,"type":"poll","kind":"track","id":"f6","title":"Blue Monday - 2016 Remaster","artist":"New Order","duration_ms":270000,"progress_ms":30000,"is_playing":true,"fetched_at":578000}
+{"t":608000,"type":"session_end","reason":"stopped"}
