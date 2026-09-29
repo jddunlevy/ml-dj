@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from mldj import capture, scrobbles, tags
+    from mldj import capture, export, scrobbles, tags
     from mldj.measure import report
     from mldj.space import evaluate
 
@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.register(subparsers)
     tags.register(subparsers)
     evaluate.register(subparsers)
+    export.register(subparsers)
     return parser
 
 
