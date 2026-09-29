@@ -3258,14 +3258,14 @@ That string is the justification `CLAUDE.md` asks for. Paste it into the plan's 
 
 Phase 0 is finished when all of the following are true:
 
-- [ ] `pytest` passes with no network access and no test taking longer than a second
-- [ ] `ruff check src tests` is clean
+- [x] `pytest` passes with no network access and no test taking longer than a second
+- [x] `ruff check src tests` is clean
 - [ ] At least five `--label dj` sessions are captured, totalling two hours or more, plus at least one contrast session under another label
-- [ ] `data/scrobbles.jsonl` holds the full history, and the **distinct-track count is written down** (spec open question 4, first half)
-- [ ] Every pair in `fixtures/match-gold.json` passes, and a sample of `novel_examples` has been read by eye without recognising anything
+- [x] `data/scrobbles.jsonl` holds the full history (39,100 scrobbles), and the distinct-track count is written down: **5,831** — recorded in CLAUDE.md (spec open question 4, first half)
+- [ ] ~~Every pair in `fixtures/match-gold.json` passes~~ (26/26 do) — still to do: read a sample of `novel_examples` has been read by eye without recognising anything
 - [ ] `reports/phase0-<date>.md` exists and carries: novelty `play_rate` and `track_rate`, post-skip versus post-completion persistence with the delta, repetition at 1/7/14 days, and `unknown_plays` by reason
 - [ ] `interval_verdict` reads `"adequate"` — or the interval has been changed and sessions recaptured at the new value
-- [ ] `git status --porcelain` shows nothing under `data/` or `reports/`, and no credential has ever been staged
+- [x] `git status --porcelain` shows nothing under `data/` or `reports/`, and no credential has ever been staged
 
 The report's numbers are then beat 3's evidence. Phase 1 starts from `docs/superpowers/specs/2026-09-28-ml-dj-design.md` and the distinct-track count this phase produced.
 
