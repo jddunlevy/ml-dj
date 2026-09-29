@@ -89,12 +89,34 @@ Last.fm API key: https://www.last.fm/api/account/create
   Artists are cut off for apps created after 2024-11-27 in development mode. This is why the feature
   space is the Last.fm tag graph. It is a design input, not a workaround.
 - **Last.fm does not record skips.** Scrobbles fire after ~half a track or four minutes, so a skip
-  is an absence. Historical skip data does not exist; it only exists live, from capture.
+  is an absence. No skip data exists *in Last.fm*, historically or otherwise — it only exists live,
+  from capture. **But see the next bullet: the spec reasons only from Last.fm, and Spotify's own
+  export is a different source that nobody had checked.**
+- **Spotify's data export may carry historical skips — verify, do not assume either way.** The
+  Extended Streaming History export (account.spotify.com/privacy) records per-play `ms_played`,
+  `reason_start` and `reason_end`, and `reason_end: "fwdbtn"` means the next button was pressed:
+  a skip, with timing. If that holds it is a large offline-evaluation corpus for Phase 3, and it
+  narrows the constraint above rather than removing it. Two caveats before relying on it: the exact
+  field set must be confirmed against a real export, and **the export probably does not flag which
+  plays came from the AI DJ**. Novelty, post-skip persistence and repetition are all claims about
+  *what the DJ chose*, so **capture stays necessary** regardless of what the export contains.
+  Requested 2026-09-29; extended takes up to 30 days, plain Account data ~5 days.
 - **Poll granularity matters.** `cd-player` polls at 5000 ms, which collapses fast skips and
   multi-skip bursts. Phase 0 polls faster and the chosen value must be justified by measurement,
   traded against rate limits.
-- **History depth is settled:** 39,000+ all-time scrobbles. What is not settled is how many
-  *distinct* tracks that covers and how well Last.fm tags them.
+- **History depth is settled, and now counted:** 39,100 all-time scrobbles over **5,831 distinct
+  tracks** (measured 2026-09-29, 196 pages). That retires the first half of the spec's open
+  question 4 — the corpus is deep rather than broad, about 6.7 plays per track, and 5,831 tracks is
+  what Phase 1's SVD rank rests on. Still open: how many of those tracks Last.fm actually tags.
+- **The scrobble history has a 67-day hole, ending 2026-07-24.** Scrobbling had silently stopped.
+  Novelty asks "was this never previously scrobbled", so a track first heard inside that window
+  reads as never-heard and **measured novelty comes out overstated** — the DJ looks *better* at
+  exploration than it is. That direction cannot be accused of flattering the pitch's argument, but
+  the number is still wrong, and wrong in the most recent window, which is exactly where the DJ
+  draws from. `IngestSummary.gap_days` / `.stale` detect it and `mldj ingest` warns. Report novelty
+  as an **upper bound** with the gap's dates named; never quietly drop the window from the
+  denominator. Scrobbling was reconnected 2026-09-29 — confirm with `mldj ingest` once tracks have
+  played and check `gap_days` falls.
 
 ## The one unsolved problem in Phase 0
 
