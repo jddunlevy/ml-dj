@@ -314,7 +314,7 @@ The skip detector's core primitive. Pure functions, no network, no clock — so 
   - `mldj.nowplaying.interpolate_progress(np: NowPlaying, now: int) -> int`
   - `mldj.nowplaying.ENDPOINT: str`
 
-- [ ] **Step 1: Write the anonymized fixtures**
+- [x] **Step 1: Write the anonymized fixtures**
 
 Create `fixtures/nowplaying-track.json` — shaped exactly like the real payload, with invented track data because this repo is public:
 
@@ -363,7 +363,7 @@ Create `fixtures/nowplaying-episode.json`:
 }
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `tests/test_nowplaying.py`:
 
@@ -434,12 +434,12 @@ def test_interpolate_never_runs_past_the_duration():
     assert interpolate_progress(np, now=100_000) == 213000
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_nowplaying.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.nowplaying'`
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `src/mldj/nowplaying.py`:
 
@@ -513,12 +513,12 @@ def interpolate_progress(np: NowPlaying, now: int) -> int:
     return min(np.duration_ms, np.progress_ms + (now - np.fetched_at))
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_nowplaying.py -v`
 Expected: PASS — 9 passed
 
-- [ ] **Step 6: Lint, then commit**
+- [x] **Step 6: Lint, then commit**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
@@ -551,7 +551,7 @@ Every network call and every read of the current time goes through these, so tes
   - `tests.fakes.FakeClock(start_ms: int = 0)` — `now_ms()`, `sleep_ms()`, `advance_ms()`, and a `sleeps: list[int]` record
   - `tests.fakes.FakeTransport(responses: list[Response] | None = None)` — `get`/`post`, a `requests` record, raises `AssertionError` when its script runs out
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_transport.py`:
 
@@ -619,12 +619,12 @@ def test_fake_transport_fails_loudly_when_the_script_runs_out():
         transport.get("https://example.invalid/a")
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_transport.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.transport'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/mldj/clock.py`:
 
@@ -803,12 +803,12 @@ class FakeTransport:
         return self.responses.pop(0)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_transport.py -v`
 Expected: PASS — 10 passed
 
-- [ ] **Step 5: Lint, then commit**
+- [x] **Step 5: Lint, then commit**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
@@ -845,7 +845,7 @@ A Python port of `cd-player`'s `auth.ts`, with `localStorage` replaced by a giti
   - `mldj.auth.token_provider(transport, clock, client_id, path=TOKENS_PATH) -> Callable[[], str]`
   - `mldj.auth.REDIRECT_URI`, `mldj.auth.SCOPE`, `mldj.auth.TOKENS_PATH`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_auth.py`:
 
@@ -1018,12 +1018,12 @@ def test_wait_for_code_captures_the_code_from_a_real_loopback_request():
     assert captured == ["xyz789"]
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_auth.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.auth'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/mldj/auth.py`:
 
@@ -1237,12 +1237,12 @@ def token_provider(
     return provide
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_auth.py -v`
 Expected: PASS — 17 passed
 
-- [ ] **Step 5: Verify against the real Spotify app, once**
+- [ ] **Step 5: Verify against the real Spotify app, once** — BLOCKED, see Open blockers
 
 This is the step that confirms the credential and redirect URI are right before a listening session depends on them.
 
@@ -1257,7 +1257,7 @@ Expected: a browser opens, Spotify asks to authorize, the tab shows "ml-dj is au
 
 If Spotify shows `INVALID_CLIENT: Invalid redirect URI`, the app's registered URI does not match `http://127.0.0.1:8888/callback` exactly — fix it in the Spotify dashboard, not in the code.
 
-- [ ] **Step 6: Confirm no secret is staged, then commit**
+- [x] **Step 6: Confirm no secret is staged, then commit**
 
 ```bash
 git status --porcelain
@@ -1297,7 +1297,7 @@ The long pole ships at the end of this task. Everything after it is analysis bui
   - `mldj.capture.run_capture(*, transport, clock, access_token, writer, label, sid, interval_ms, should_stop) -> None`
   - `mldj.capture.register(subparsers) -> None`
 
-- [ ] **Step 1: Write the failing tests for the event log**
+- [x] **Step 1: Write the failing tests for the event log**
 
 Create `tests/test_events.py`:
 
@@ -1316,11 +1316,11 @@ from mldj.nowplaying import NowPlaying
 
 
 def test_session_id_is_a_sortable_utc_stamp():
-    assert session_id(1_759_190_400_000) == "20250930T010000Z"
+    assert session_id(1_759_190_400_000) == "20250930T000000Z"
 
 
 def test_session_path_names_the_file_by_label_and_id(tmp_path):
-    assert session_path("dj", "20250930T010000Z", tmp_path).name == "dj-20250930T010000Z.jsonl"
+    assert session_path("dj", "20250930T000000Z", tmp_path).name == "dj-20250930T000000Z.jsonl"
 
 
 def test_writer_appends_one_json_object_per_line_and_read_events_round_trips(tmp_path):
@@ -1395,12 +1395,12 @@ def test_gap_and_end_events():
     assert session_end_event(9, "stopped") == {"t": 9, "type": "session_end", "reason": "stopped"}
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_events.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.events'`
 
-- [ ] **Step 3: Write the event log**
+- [x] **Step 3: Write the event log**
 
 Create `src/mldj/events.py`:
 
@@ -1505,12 +1505,12 @@ def poll_event(np: NowPlaying | None, now_ms: int) -> dict[str, Any]:
     }
 ```
 
-- [ ] **Step 4: Run the event tests to verify they pass**
+- [x] **Step 4: Run the event tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_events.py -v`
 Expected: PASS — 10 passed
 
-- [ ] **Step 5: Write the failing tests for the loop**
+- [x] **Step 5: Write the failing tests for the loop**
 
 Create `tests/test_capture.py`:
 
@@ -1641,12 +1641,12 @@ def test_capture_writes_session_end_even_when_the_loop_raises(tmp_path):
     assert events[-1]["reason"] == "interrupted"
 ```
 
-- [ ] **Step 6: Run them to verify they fail**
+- [x] **Step 6: Run them to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_capture.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.capture'`
 
-- [ ] **Step 7: Write the loop and wire up the subcommand**
+- [x] **Step 7: Write the loop and wire up the subcommand**
 
 Create `src/mldj/capture.py`:
 
@@ -1779,12 +1779,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 ```
 
-- [ ] **Step 8: Run the whole suite to verify it passes**
+- [x] **Step 8: Run the whole suite to verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest -v`
 Expected: PASS — 47 passed
 
-- [ ] **Step 9: Capture a real session**
+- [ ] **Step 9: Capture a real session** — BLOCKED, see Open blockers
 
 ```bash
 .venv/Scripts/python.exe -m mldj capture --label dj
@@ -1802,7 +1802,7 @@ git status --porcelain
 
 Expected: several hundred to several thousand events, the first a `session_start`, and `git status --porcelain` showing **nothing** under `data/`. If `data/` appears, stop and fix `.gitignore` before committing anything.
 
-- [ ] **Step 10: Commit — capture is live**
+- [x] **Step 10: Commit — capture is live**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
@@ -3268,3 +3268,27 @@ Phase 0 is finished when all of the following are true:
 - [ ] `git status --porcelain` shows nothing under `data/` or `reports/`, and no credential has ever been staged
 
 The report's numbers are then beat 3's evidence. Phase 1 starts from `docs/superpowers/specs/2026-09-28-ml-dj-design.md` and the distinct-track count this phase produced.
+
+---
+
+## Open blockers
+
+Recorded 2026-09-29, while executing Tasks 1-5.
+
+### 1. The Spotify app's redirect URI does not include port 8888
+
+**Blocks:** Task 4 Step 5 (verify auth against the real app), Task 5 Step 9 (capture a real session), and therefore the whole measurement chain.
+
+`cd-player`'s registered redirect URI is `http://127.0.0.1:5173/callback` (`cd-player/src/config.ts:5`). Phase 0 uses `http://127.0.0.1:8888/callback`, which the spec, `CLAUDE.md`, and `.env.local.example` all state must match exactly. Unless that app already has a second URI registered, authorization will fail with `INVALID_CLIENT: Invalid redirect URI`.
+
+**Fix:** at https://developer.spotify.com/dashboard, open the app whose client ID is now in `.env.local`, and add `http://127.0.0.1:8888/callback` to its Redirect URIs. Spotify allows several per app, so `cd-player`'s `:5173` entry can stay. Then run Task 4 Step 5.
+
+An alternative — pointing Phase 0 at `:5173` instead — was rejected: the port is written into the spec and `.env.local.example`, and Phase 4's browser client will want `:5173` free for Vite.
+
+### 2. The Last.fm credentials are not set
+
+**Blocks:** Task 8 Step 8 (the real ingest), and Tasks 9-12, which need the history.
+
+`.env.local` now holds `SPOTIFY_CLIENT_ID`, reused from `cd-player` as `CLAUDE.md` directs. `LASTFM_API_KEY` and `LASTFM_USER` are still empty. Create a key at https://www.last.fm/api/account/create and set both.
+
+Neither blocker stops Tasks 6 and 7, which are pure offline logic tested against committed fixtures.
