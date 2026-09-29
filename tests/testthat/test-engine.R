@@ -52,6 +52,13 @@ test_that("history records every event in order", {
   expect_equal(s$history[[2]]$outcome, "skipped")
 })
 
+test_that("a skipped event with no earliness raises rather than assuming full strength", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  no_earliness <- list(tags = "dance", outcome = "skipped", artist = "A", title = "T", ts = 0)
+  expect_error(session_step(session_new(sp), no_earliness), "no earliness")
+})
+
 test_that("a skip after a completion pulls the vector back toward neutral", {
   skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
   sp <- load_space(SPACE_PATH)

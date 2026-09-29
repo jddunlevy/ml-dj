@@ -6,7 +6,9 @@
 #'
 #' An unknown outcome decays without updating: an ambiguous record may not have been a skip,
 #' so it cannot found a negative claim. Phase 0 applies the same rule to persistence and
-#' repetition, and the prototype must not be more confident than the measurement was.
+#' repetition, and the prototype must not be more confident than the measurement was. A skipped
+#' event missing earliness is the same kind of ambiguity, not a license to assume full-strength
+#' penalty, so it raises instead of defaulting to 1.
 #'
 #' Negative updates subtract the skipped track's own tag vector. The parent spec calls for
 #' projecting along antonym-derived axes instead; that is Phase 2 work and it replaces exactly
@@ -24,7 +26,10 @@ session_step <- function(state, event) {
   if (outcome == "completed") {
     v <- v + state$w * tag_vector(state$space, unlist(event$tags))
   } else if (outcome == "skipped") {
-    earliness <- max(0, min(1, event$earliness %||% 1))
+    if (is.null(event$earliness)) {
+      stop("skipped event has no earliness - malformed source data", call. = FALSE)
+    }
+    earliness <- max(0, min(1, event$earliness))
     # <- Phase 2 replaces this line with a projection along antonym axes
     v <- v - state$w * tag_vector(state$space, unlist(event$tags)) * earliness
   } else if (outcome != "unknown") {
