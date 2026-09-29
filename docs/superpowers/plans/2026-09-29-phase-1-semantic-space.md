@@ -351,3 +351,19 @@ Measured at `min_count=3`: **63 of 508 terms (12.4%) are single-artist**; `<3 ar
 Real semantic relations, and `Hip-Hop ~ rap` is a genuine synonym pair — the exact signal Task 8's gold set will grade. **`min_artists` belongs in the Task 8 sweep alongside `min_count` and `rank`.** One residue survives at `min_artists=2`: `swedish ~ abba` at 0.751, because two artists carry the `abba` tag (covers or compilations), which suggests trying 3.
 
 **Note also that PPMI kept 100% of cells (11,022 of 11,022).** With binary presence over sparse data, almost every observed co-occurrence beats chance, so clamping prunes nothing and `shift` is the only lever that would — worth including in the sweep for that reason rather than for SGNS equivalence.
+
+### Task 6 — the reduced space works, and shows exactly what Phase 2 is for
+
+Tiers on the real corpus (artist cache partly populated): `{track: 1363, album: 810, artist: 2928, none: 730}` — 87.5% of tracks now carry a vector, and `none` will fall further as the artist pull completes. Matrix: 445 terms × 2,500 items (1,363 tracks + 1,137 artists).
+
+**Explained variance is low and the spectrum is flat:** 0.293 at rank 25, 0.599 at rank 100, 0.717 at rank 150, with a head of 87.8, 64.0, 61.5, 58.6, 56.7, 53.5 — no dominant component. A folksonomy over 445 terms simply has no strong low-rank structure, so rank selection cannot be read off an elbow; Task 8's gold set has to decide it. Smallest gap in the leading 20 values is 0.135 against magnitudes near 60 — near-degenerate, which is why reproducibility is per-seed and **`seed` must be recorded in `space.json`'s meta** (an omission in Task 7's planned meta list — add it).
+
+Nearest neighbours that are right: `hip hop → rap 0.89` (a genuine synonym), `ambient → idm, Ambient Techno, atmospheric`, `dream pop → shoegaze, ethereal`, `sad → depressive, emotional`, `80s → 1983, 1982, 1985`.
+
+**Three problems, in descending order of importance.**
+
+**1. `loud → danceable 0.85, melodic 0.84, upbeat 0.76`.** This is the project's central thesis appearing in its own data. These are not synonyms; they co-occur because the same kind of tagger applies all of them to the same energetic tracks. Distributional similarity has conflated *relatedness* with *similarity* — and it is the identical mechanism that will score `loud`/`quiet` as similar, since they too share contexts while never co-tagging one item. **Phase 2's discriminator is aimed exactly here, and this is the example to put in front of it.** `loud` and `quiet` should be added to the Task 8 gold set as an antonym pair, with `loud`/`danceable` as a `related` pair, so the level-1 evaluation records how badly the unaided space confuses them.
+
+**2. Year tags pollute: `mellow → 1972 at 0.72`.** Specific years are metadata, not description, and they are numerous. They are not pure noise — `80s → 1983, 1982, 1985` is coherent — but `mellow → 1972` is spurious, and a 4-digit year is mechanically identifiable. Whether to drop them is a judgment call, so **add `drop_year_tags` to the Task 8 sweep** rather than deciding it here.
+
+**3. Organizational and residual artist tags survive:** `fav`, `Masterpiece`, `KICK`, `Big Music` are personal filing labels with no descriptive content, and `Timbaland` and `Fleetwood Mac` slipped past `min_artists=2` (a producer credited across artists, and a band tag on covers). A curated stop-list is the obvious fix and also the kind of thing that quietly encodes assumptions, so it belongs in Task 8 next to the gold set that can measure whether it helps — **and `min_artists=3` should be tried first**, since it is principled rather than hand-listed.
