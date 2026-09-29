@@ -99,7 +99,7 @@ Nothing runs until `python -m mldj` resolves and the two credentials can be read
   - `mldj.cli.build_parser() -> argparse.ArgumentParser` — later tasks add subparsers here
   - `mldj.cli.main(argv: Sequence[str] | None = None) -> int`
 
-- [ ] **Step 1: Create the virtual environment and install dev dependencies**
+- [x] **Step 1: Create the virtual environment and install dev dependencies**
 
 ```bash
 python -m venv .venv
@@ -109,7 +109,7 @@ python -m venv .venv
 
 Expected: `Successfully installed mldj-0.1.0 ... pytest-8.x ... ruff-0.x`. Every later `pytest` and `ruff` command in this plan means `.venv/Scripts/python.exe -m pytest` / `-m ruff` unless the venv is already activated.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `tests/test_env.py`:
 
@@ -177,12 +177,12 @@ def test_main_with_no_command_exits_two_and_prints_usage(capsys):
     assert "usage: mldj" in capsys.readouterr().out
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_env.py tests/test_cli.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj'`
 
-- [ ] **Step 4: Write the package skeleton**
+- [x] **Step 4: Write the package skeleton**
 
 Create `src/mldj/__init__.py`:
 
@@ -278,7 +278,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_env.py tests/test_cli.py -v`
 Expected: PASS — 11 passed
@@ -286,7 +286,7 @@ Expected: PASS — 11 passed
 Run: `.venv/Scripts/python.exe -m mldj`
 Expected: `usage: mldj [-h] <command> ...` and exit code 2
 
-- [ ] **Step 6: Lint, then commit**
+- [x] **Step 6: Lint, then commit**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
