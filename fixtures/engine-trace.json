@@ -1,0 +1,39 @@
+{
+  "source": "fixtures/session-synthetic.json",
+  "decay": 0.85,
+  "w": 1,
+  "steps": [
+    {
+      "terms": ["indierock", "alternative", "indie", "rock", "alternativerock"],
+      "cos": [0.778885, 0.778885, 0.74382, 0.492827, 0.433433]
+    },
+    {
+      "terms": ["indierock", "indie", "alternative", "dreampop", "rock"],
+      "cos": [0.845344, 0.718584, 0.527819, 0.48413, 0.406781]
+    },
+    {
+      "terms": ["indierock", "indie", "alternative", "dreampop", "rock"],
+      "cos": [0.634255, 0.479103, 0.36718, 0.360015, 0.280905]
+    },
+    {
+      "terms": ["dreampop", "indierock", "shoegaze", "indie", "alternative"],
+      "cos": [0.653996, 0.513655, 0.498299, 0.455165, 0.308482]
+    },
+    {
+      "terms": ["dreampop", "indierock", "shoegaze", "indie", "alternative"],
+      "cos": [0.549056, 0.434651, 0.422927, 0.379496, 0.259487]
+    },
+    {
+      "terms": ["dreampop", "shoegaze", "ethereal", "indierock", "indie"],
+      "cos": [0.72131, 0.456393, 0.42574, 0.351635, 0.335105]
+    },
+    {
+      "terms": ["dreampop", "shoegaze", "ethereal", "indierock", "indie"],
+      "cos": [0.72131, 0.456393, 0.42574, 0.351635, 0.335105]
+    },
+    {
+      "terms": ["dreampop", "shoegaze", "ethereal", "artpop", "indie"],
+      "cos": [0.819132, 0.413102, 0.362076, 0.307491, 0.302638]
+    }
+  ]
+}
