@@ -187,15 +187,20 @@ means `httr2` and `dplyr` are needed only for live mode — not for the pitch.
 1. **The replay source has nothing to replay.** `data/sessions/` is empty. Development proceeds
    against a synthetic session fixture, but **the demo needs one real captured DJ session**,
    which keeps `mldj capture` on the critical path. This is the same long pole Phase 0 has.
-2. **R package installs are unverified.** `ggplot2` and `scales` are present on R 4.5.3.
-   `shiny`, `jsonlite` and `testthat` are not, and `httr2`/`dplyr` are needed for live mode. In the
-   sandboxed environment used during design, CRAN's package index fetched successfully but binary
-   downloads failed with `SSL connect error` — a pattern consistent with sandbox TLS interception
-   rather than a fault on the author's machine. **Verify this first**; it invalidates the whole
-   design if it does not resolve.
-3. **ggplot re-render latency** is roughly 150–250 ms. Fine at a 2–5 s poll or on a scrubber step;
-   not viable if the live poll interval drops toward 250 ms. If Phase 0's measured interval turns
-   out to be very fast, live mode renders on a throttle rather than per poll.
+2. ~~**R package installs are unverified.**~~ **RESOLVED 2026-09-29.** Installed and smoke-tested
+   on R 4.5.3: `shiny` 1.14.0, `jsonlite` 2.0.0, `testthat` 3.3.2, alongside `ggplot2` 4.0.2 and
+   `scales`. `jsonlite::fromJSON` parses `space.json` in **0.08 s** to 371 terms and a 371×150
+   matrix, and a `shinyApp` object constructs. `httr2`/`dplyr` are still uninstalled; they are
+   live-mode only and off the demo path.
+
+   One environment trap worth keeping: **R's default `libcurl` download method fails here** with
+   `SSL connect error` while the package index still fetches, which makes it look like a broken
+   mirror. `wininet` and `curl` both work. If `install.packages` fails this way, set
+   `options(download.file.method = "wininet")` rather than chasing the mirror.
+3. **ggplot re-render latency: measured 187 ms median** (range 173–341 ms, n=5, the constellation
+   at 6.4×4.3in / 190 dpi). Comfortable on a scrubber step and at a 2–5 s poll. Not viable per-poll
+   if Phase 0's measured interval lands near 250 ms, in which case live mode renders on a throttle
+   rather than on every poll. The demo path is the scrubber, so this cannot affect the pitch.
 4. **OAuth inside Shiny** is the fiddliest part of live mode. It is not on the demo path — replay
    needs no auth at all — so it cannot block the pitch.
 5. **`space.json` is gitignored** because 4 of its 371 terms are artist names carried over from the
