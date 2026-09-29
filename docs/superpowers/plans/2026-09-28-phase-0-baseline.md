@@ -2319,7 +2319,7 @@ Create `fixtures/match-gold.json`:
 }
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `tests/test_match.py`:
 
@@ -2375,12 +2375,12 @@ def test_track_key_is_a_pair_of_normalized_strings():
     assert track_key("New Order", "Blue Monday - 2016 Remaster") == ("new order", "blue monday")
 ```
 
-- [ ] **Step 3: Run them to verify they fail**
+- [x] **Step 3: Run them to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_match.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.match'`
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `src/mldj/match.py`:
 
@@ -2490,14 +2490,14 @@ def same_track(a: tuple[str, str], b: tuple[str, str]) -> bool:
     return a == b
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_match.py -v`
 Expected: PASS — 30 passed (24 gold pairs plus 6 unit tests)
 
 If a gold pair fails, fix the word sets or the segment rules — **do not weaken the gold pair to match the code.** The gold set is the contract. If a pair turns out to be genuinely ambiguous, it does not belong in the gold set at all; delete it and say why in the commit message.
 
-- [ ] **Step 6: Lint, then commit**
+- [x] **Step 6: Lint, then commit**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
