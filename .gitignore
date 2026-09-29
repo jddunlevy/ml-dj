@@ -36,6 +36,11 @@ node_modules/
 .superpowers/
 .claude/
 
+# --- R ---
+.Rproj.user/
+.Rhistory
+.RData
+
 # --- os ---
 .DS_Store
 Thumbs.db
