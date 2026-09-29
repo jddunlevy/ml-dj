@@ -290,3 +290,16 @@ From the same partial cache (1,626 raw tag strings). Counts scale roughly 1.5× 
 **This matters for Task 8's sweep, and shifts the expected answer.** The plan's `min_count=5` default leaves only ~257 terms (perhaps ~330 once the pull finishes), which is a small vocabulary for a space meant to carry gradable predicates, polysemy and antonymy. `min_count=3` roughly doubles it. The hapax tail is genuinely uninformative, but the drop from 1,567 to 257 is steep enough that **the sweep should include `min_count` 2 and 3, not just 5 and up** — and the rank ceiling follows from it, since truncated SVD needs `rank < len(vocab)`.
 
 Normalization measurably works on real tags: 50 canonical terms absorb more than one raw spelling, `rnb` alone absorbing six (`RB`, `r n b`, `r&b`, `r'n'b`, `rhythm and blues`, `rnb`), and `80s` absorbing `80's`.
+
+### Task 3 — tier distribution, real corpus, partial cache
+
+With 3,276 of 5,831 tracks fetched and the artist cache not yet populated, at `min_count=3` (394 terms):
+
+| tier | tracks | share |
+|---|---|---|
+| track (own tags) | 984 | 16.9% |
+| album siblings | 874 | 15.0% |
+| artist | 0 | 0.0% — pass 2 had not run |
+| none | 3,973 | 68.1% |
+
+**The album tier contributes as many tracks as the track tier does.** Pooling album-mates is not a marginal rescue; it roughly doubles the tracks that get any tag vector at all, and it does so with evidence far more specific than the artist's whole catalogue. Once artist tags are in place (95% coverage), `none` should fall to near zero, so the expected final split is roughly 25% track / 20% album / 53% artist / ~2% none — **meaning about three quarters of all vectors will be inherited.** That number belongs in beat 6, and it is the reason the learning matrix is restricted to the track tier.
