@@ -403,3 +403,51 @@ Counts by `min_artists`:
 | 4 | 300 | 6 | — | 19 |
 
 `min_artists=3` costs 38 terms and cuts genuine leaks from 19 to about 5 (`radiohead`, `Kanye West`, `kendrick lamar`, `Phoebe Bridgers`, `Timbaland`). It also removes the `swedish ~ abba` residue noted under Task 5. **Take 3 as the sweep's starting point, and expect to clear a short review list by hand before `space.json` can be committed.**
+
+### Task 8 — level-1 FAILS, and the gold set earned its keep by catching a wrong premise
+
+Reach pull complete: 578 raw tags queried, 0 failures, cached in `data/tag-reach.json`. Vocabulary size against `min_reach` (at `min_count=3, min_artists=3`): 0 → 407, 50 → 380, **200 → 371**, 1000 → 308, 5000 → 199. `min_reach=200` removes 36 terms including `WSUM 91.7 FM Madison` and the playlist labels, while keeping `loud` (reach 2,693). Use 200; 1000 starts eating real descriptors.
+
+Level-1 result at `min_count=3, min_artists=3, min_reach=200, rank=150`:
+
+| label | pairs | mean | min | max |
+|---|---|---|---|---|
+| synonym | 12 | **0.183** | −0.032 | 0.812 |
+| related | 14 | **0.409** | 0.120 | 0.954 |
+| antonym | 12 | 0.023 | −0.144 | 0.472 |
+| complementary | 11 | −0.026 | −0.075 | 0.019 |
+| unrelated | 12 | −0.004 | −0.048 | 0.057 |
+
+**`ranking synonym > related > unrelated` FAILS**, because related (0.409) outscores synonym (0.183). Spearman 0.281. `synonym − unrelated` is +0.187, so the space is not broken — it separates synonyms from unrelated pairs — but the middle band is inverted.
+
+**A frequency explanation was tested and rejected.** Spearman between similarity and the rarer tag's track count is only 0.318, with flat counterexamples: `funk ~ funky` scores +0.612 on 7 tracks while `mellow ~ chill` scores +0.036 on 21.
+
+**The actual cause, measured: the spec's central premise about folksonomies is inverted.** The spec says *"Synonyms co-tag the same track constantly — one song carries both `chill` and `mellow`"*, and the antonym discriminator rests on it. Raw same-item co-occurrence over the gold set:
+
+```
+nostalgia ~ nostalgic        0 co-occurrences   jaccard 0.000
+relax ~ relaxing             0                          0.000
+soothing ~ calm              0                          0.000
+trippy ~ psychedelic         0                          0.000
+smooth ~ soft                0                          0.000
+mellow ~ chill               3                          0.032   <- the spec's own example
+indie ~ indie rock         613                          0.479
+rock ~ alternative rock    414                          0.364
+```
+
+**Mean Jaccard: synonym 0.103, related 0.259.** Synonyms co-occur *less than* related pairs.
+
+The reason is that **tagging is an act of choosing a label, not enumerating equivalents.** A tagger writes `nostalgic` or `nostalgia`, never both; `mellow` or `chill`, not the pair. Hypernym/subgenre pairs co-occur constantly because they are different *levels* of description and both true at once. The exception proves the mechanism: `hip hop ~ rap` co-occurs 154 times (Jaccard 0.592) because those two words belong to different tagger communities, so a popular track accumulates both.
+
+**Consequence for Phase 2, and it is serious.** The planned discriminator —
+
+```
+high distributional similarity + low same-item co-occurrence  =>  antonym
+high distributional similarity + high same-item co-occurrence =>  synonym
+```
+
+— would classify `mellow`/`chill`, `nostalgia`/`nostalgic`, `relax`/`relaxing` and `soothing`/`calm` as **antonyms**. Those are synonyms, and two of them are the spec's own illustration. Low co-occurrence does not distinguish opposition from interchangeability, because both produce it. **Phase 2 cannot be built on the co-occurrence half of that test as written**, and needs a third signal — candidates worth trying: substitutability (do the two tags predict the same *neighbours* rather than the same items), morphological relatedness as a prior, or asymmetry in which contexts each one adds.
+
+This is the gold set doing exactly the job it was built for: it caught a false premise before an entire phase was constructed on top of it. It is also a genuine finding about folksonomies and belongs in the teardown documentation as one — beat 6 can state that the project measured its own central assumption and found it inverted.
+
+**What to do about level 1 itself.** Do not tune until it passes; the ordering is failing for a real reason, not a hyperparameter one. Two honest options: keep the graded claim as `synonym > unrelated` plus `related > unrelated` (both of which pass, at +0.187 and +0.413) and report the synonym/related inversion as a finding; or split `synonym` into `co-tagged synonym` and `interchangeable synonym`, which is the distinction the data actually draws. The second is better and it is what the gold set should be revised to carry into Phase 2.

@@ -30,6 +30,7 @@ from mldj.match import normalize_artist
 
 DEFAULT_MIN_COUNT = 5
 DEFAULT_MIN_ARTISTS = 1
+DEFAULT_MIN_REACH = 0
 
 # Curated variant map, keyed and valued on *normalized* forms. Entries exist only where
 # normalization alone cannot collapse spellings of the same string.
@@ -135,6 +136,7 @@ class Vocabulary:
     display: Mapping[str, str] = field(default_factory=dict)
     dropped: int = 0  # dropped for falling below min_count
     dropped_by_spread: int = 0  # dropped for being attested by too few artists
+    dropped_by_reach: int = 0  # dropped for being used by too few Last.fm users
 
     def id(self, tag: str) -> int | None:
         """Id for a raw or canonical tag, or None when it is not in the vocabulary."""
@@ -149,6 +151,8 @@ def build_vocabulary(
     min_count: int = DEFAULT_MIN_COUNT,
     artist_spread: Mapping[str, int] | None = None,
     min_artists: int = DEFAULT_MIN_ARTISTS,
+    tag_reach: Mapping[str, int] | None = None,
+    min_reach: int = DEFAULT_MIN_REACH,
 ) -> Vocabulary:
     """Fold raw tag counts onto canonical terms and drop the ones too rare to inform PPMI.
 
@@ -183,6 +187,22 @@ def build_vocabulary(
     else:
         kept = frequent
 
+    # Global reach is how many distinct Last.fm users ever applied the tag. A radio
+    # station's name or a personal playlist label has a reach of 1 - one person used it -
+    # and a tag one person invented cannot carry shared meaning whatever it denotes. This
+    # is the measured alternative to a hand-curated stop-list.
+    if tag_reach is not None and min_reach > 0:
+        after_reach = {
+            term: total
+            for term, total in kept.items()
+            if tag_reach.get(term, 0) >= min_reach
+        }
+    else:
+        after_reach = kept
+
+    dropped_reach = len(kept) - len(after_reach)
+    kept = after_reach
+
     ordered = tuple(sorted(kept, key=lambda term: (-kept[term], term)))
 
     return Vocabulary(
@@ -191,5 +211,6 @@ def build_vocabulary(
         counts={term: kept[term] for term in ordered},
         display={term: spellings[term].most_common(1)[0][0] for term in ordered},
         dropped=len(totals) - len(frequent),
-        dropped_by_spread=len(frequent) - len(kept),
+        dropped_by_spread=len(frequent) - len(kept) - dropped_reach,
+        dropped_by_reach=dropped_reach,
     )

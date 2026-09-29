@@ -17,6 +17,7 @@ from mldj.transport import Transport, retry_after_ms
 API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 TAGS_DIR = Path("data/tags")  # gitignored
 ARTIST_TAGS_DIR = Path("data/artist-tags")  # gitignored; separate dir, see _cache_path
+TAG_INFO_DIR = Path("data/tag-info")  # gitignored
 
 
 class LastfmError(RuntimeError):
@@ -157,3 +158,37 @@ def artist_top_tags_cached(
     tags = artist_top_tags(client, artist)
     _write_cached(path, tags)
     return tags
+
+
+def tag_reach(client: LastfmClient, tag: str) -> int:
+    """How many distinct Last.fm users have ever applied this tag, globally.
+
+    The discriminator for tags that are idiosyncratic to one corpus rather than part of a
+    shared vocabulary. A radio station's name or somebody's playlist label has a reach of 1
+    or 2 - one person used it - while `shoegaze` has 42,668 and `80s` has 100,716. A tag one
+    person invented cannot carry shared meaning, whatever it says, so this is measured
+    rather than hand-listed.
+
+    It does not catch every kind of junk: evaluative tags like `fav` and `Masterpiece` are
+    used by thousands of people, and artist names by tens of thousands. Those need
+    min_artists and a short curated list respectively.
+    """
+    payload = client.call("tag.getInfo", tag=tag)
+    info = payload.get("tag") or {}
+    try:
+        return int(info.get("reach") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def tag_reach_cached(
+    client: LastfmClient, tag: str, cache_dir: Path = TAG_INFO_DIR
+) -> int:
+    """Disk-cached tag_reach, stored as a one-entry list so it shares the cache helpers."""
+    path = _cache_path(cache_dir, tag, "")
+    cached = _read_cached(path)
+    if cached is not None:
+        return cached[0][1] if cached else 0
+    reach = tag_reach(client, tag)
+    _write_cached(path, [(tag, reach)])
+    return reach

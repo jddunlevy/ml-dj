@@ -11,6 +11,7 @@ from collections.abc import Sequence
 def build_parser() -> argparse.ArgumentParser:
     from mldj import capture, scrobbles, tags
     from mldj.measure import report
+    from mldj.space import evaluate
 
     parser = argparse.ArgumentParser(prog="mldj", description="ml-dj offline tools")
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
@@ -18,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     scrobbles.register(subparsers)
     report.register(subparsers)
     tags.register(subparsers)
+    evaluate.register(subparsers)
     return parser
 
 
