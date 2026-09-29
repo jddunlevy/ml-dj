@@ -2539,7 +2539,7 @@ Three real gotchas, each with a test:
   - `mldj.scrobbles.SCROBBLES_PATH: Path = Path("data/scrobbles.jsonl")`
   - `mldj.scrobbles.register(subparsers) -> None`
 
-- [ ] **Step 1: Write the fixtures**
+- [x] **Step 1: Write the fixtures**
 
 Create `fixtures/lastfm-recenttracks-page.json` — anonymized, and including the now-playing row that must be skipped:
 
@@ -2587,7 +2587,7 @@ Create `fixtures/lastfm-toptags.json`:
 }
 ```
 
-- [ ] **Step 2: Write the failing client tests**
+- [x] **Step 2: Write the failing client tests**
 
 Create `tests/test_lastfm.py`:
 
@@ -2677,7 +2677,7 @@ def test_top_tags_cached_hits_the_network_once(tmp_path):
     assert len(c.transport.requests) == 1
 ```
 
-- [ ] **Step 3: Write the failing ingest tests**
+- [x] **Step 3: Write the failing ingest tests**
 
 Create `tests/test_scrobbles.py`:
 
@@ -2804,12 +2804,12 @@ def test_ingest_respects_max_pages(tmp_path):
     assert summary.pages == 1
 ```
 
-- [ ] **Step 4: Run both to verify they fail**
+- [x] **Step 4: Run both to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_lastfm.py tests/test_scrobbles.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.lastfm'`
 
-- [ ] **Step 5: Write the Last.fm client**
+- [x] **Step 5: Write the Last.fm client**
 
 Create `src/mldj/lastfm.py`:
 
@@ -2915,7 +2915,7 @@ def top_tags_cached(
     return tags
 ```
 
-- [ ] **Step 6: Write the scrobble ingest**
+- [x] **Step 6: Write the scrobble ingest**
 
 Create `src/mldj/scrobbles.py`:
 
@@ -3101,12 +3101,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_lastfm.py tests/test_scrobbles.py -v`
 Expected: PASS — 19 passed
 
-- [ ] **Step 8: Smoke-test against the real API, then run the full ingest**
+- [x] **Step 8: Smoke-test against the real API, then run the full ingest**
 
 ```bash
 # One page first, to confirm the key and username before 195 requests.
@@ -3118,7 +3118,7 @@ git status --porcelain
 
 Expected: a final line reporting close to 39,000 scrobbles and the distinct-track count. **Write the distinct-track number down** — it is the first half of spec open question 4, and Phase 1's SVD rank depends on it. `git status --porcelain` must show nothing under `data/`.
 
-- [ ] **Step 9: Lint, then commit**
+- [x] **Step 9: Lint, then commit**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
@@ -3287,10 +3287,39 @@ A new app has no Audio Features, Recommendations, or Related Artists access. Tha
 this project nothing: the feature space is the Last.fm tag graph by design. It does turn
 spec open question 1 from an assumption into a fact, ahead of Phase 3.
 
-### 2. The Last.fm credentials are not set
+### 2. ~~The Last.fm credentials are not set~~ — RESOLVED 2026-09-29
 
-**Blocks:** Task 8 Step 8 (the real ingest), and Tasks 9-12, which need the history.
+Key and username are in `.env.local`, and the full history is ingested.
 
-`.env.local` now holds `SPOTIFY_CLIENT_ID`, reused from `cd-player` as `CLAUDE.md` directs. `LASTFM_API_KEY` and `LASTFM_USER` are still empty. Create a key at https://www.last.fm/api/account/create and set both.
+**Measured corpus:** 39,100 scrobbles, 196 pages, **5,831 distinct tracks**. The distinct
+count is the first half of spec open question 4 and sets Phase 1's SVD rank; the ratio,
+about 6.7 plays per track, says the corpus is deep rather than broad.
 
-Neither blocker stops Tasks 6 and 7, which are pure offline logic tested against committed fixtures.
+### 3. The scrobble history has a 67-day gap — OPEN, mitigations in flight
+
+**Affects:** the novelty rate, which is beat 3's headline number.
+
+Last.fm's newest scrobble is dated 2026-07-24, 67 days before ingest. Scrobbling had
+silently stopped. Novelty asks "was this never previously scrobbled", so any track first
+heard inside that window is absent from the history and will be counted as never-heard:
+**measured novelty comes out overstated.**
+
+That direction is the safe one for credibility — it makes the DJ look *better* at
+exploration, so the pitch cannot be accused of flattering its own argument. But the number
+is still wrong, and it is wrong in the most recent 67 days, which is exactly the window the
+DJ draws from, so the error is larger than the 67/all-time share of the corpus suggests.
+
+Mitigations, in order of value:
+
+1. **Reconnect scrobbling.** Stops the gap growing while capture runs for days.
+2. **Request Spotify's Extended Streaming History** (Privacy Settings → download your
+   data). It covers the gap completely and is free; it arrives in days to weeks, so
+   requesting early may rescue the number before the pitch. If it lands, backfill it into
+   `data/scrobbles.jsonl` through `match.track_key` and re-run the report.
+3. **State it in beat 6 regardless.** `IngestSummary.gap_days` and `.stale` exist so the
+   report can print the caveat automatically. Novelty is reported as an **upper bound**,
+   with the gap's dates named. An eyeball pass over `novel_examples` (Task 9) is the
+   practical check: anything in that list you actually recognise fell inside the gap.
+
+Do not quietly drop the gap window from the denominator — the honest form is a stated upper
+bound, not a silently narrowed measurement.
