@@ -52,7 +52,9 @@ class TrackTags:
     source: str  # human-readable provenance, for auditing a surprising vector
 
 
-def _usable(rows: TagRows | None, vocab: Vocabulary, top_n: int) -> tuple[str, ...]:
+def usable_tags(
+    rows: TagRows | None, vocab: Vocabulary, top_n: int = DEFAULT_TOP_N
+) -> tuple[str, ...]:
     """Canonicalize, drop anything outside the vocabulary, dedupe, cap at top_n.
 
     Rows arrive sorted by Last.fm count, and that order is kept: it is the only signal of
@@ -80,7 +82,7 @@ def assign_tags(
 
     # Track-tier resolution first: album pooling needs to know which siblings are usable,
     # and a tag outside the vocabulary is no tag at all for that purpose.
-    own = {key: _usable(track_tags.get(key), vocab, top_n) for key in index.track_reps}
+    own = {key: usable_tags(track_tags.get(key), vocab, top_n) for key in index.track_reps}
 
     # Albums are keyed by (normalized artist, album) so two artists sharing an album title
     # never pool into each other.
@@ -118,7 +120,7 @@ def assign_tags(
                 )
                 continue
 
-        inherited = _usable(artist_tags.get(normalize_artist(artist)), vocab, top_n)
+        inherited = usable_tags(artist_tags.get(normalize_artist(artist)), vocab, top_n)
         if inherited:
             assignments[key] = TrackTags(key, inherited, "artist", f"artist {artist!r}")
             continue

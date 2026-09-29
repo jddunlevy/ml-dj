@@ -303,3 +303,20 @@ With 3,276 of 5,831 tracks fetched and the artist cache not yet populated, at `m
 | none | 3,973 | 68.1% |
 
 **The album tier contributes as many tracks as the track tier does.** Pooling album-mates is not a marginal rescue; it roughly doubles the tracks that get any tag vector at all, and it does so with evidence far more specific than the artist's whole catalogue. Once artist tags are in place (95% coverage), `none` should fall to near zero, so the expected final split is roughly 25% track / 20% album / 53% artist / ~2% none — **meaning about three quarters of all vectors will be inherited.** That number belongs in beat 6, and it is the reason the learning matrix is restricted to the track tier.
+
+### Task 4 — the real matrix, and its co-occurrence
+
+numpy 2.5.3 and scipy 1.18.1 both install cleanly on Python 3.14, so the planned `scipy.sparse` design stands.
+
+At `min_count=3` with 5,000 of 5,831 tracks fetched: **480 terms × 1,277 track-tier columns, 10,365 nonzero cells, 1.69% density.** Artist columns were still zero because the pull had not reached pass 2 — verified as an empty cache rather than a defect, with a synthetic check confirming `include_artists` adds columns when artist tags exist.
+
+Highest same-item co-occurrence on real data reads exactly as it should:
+
+```
+rock + alternative        240 items
+indie + alternative       224 items
+rock + alternative rock   223 items
+indie + indie rock        197 items
+```
+
+Those are the synonym-and-hypernym end of the spectrum, which is the half **Phase 2 must distinguish from antonymy**. The pairs now need their opposite: two tags with high distributional similarity that almost never share an item. Nothing in the top-co-occurrence list is a candidate, which is the point — Phase 2's signal lives where these counts are *low* while SVD similarity is *high*, and the gold set built in Task 8 is what will name those pairs.

@@ -7,7 +7,13 @@ name = "mldj"
 version = "0.1.0"
 description = "Teardown and redesign of Spotify's AI DJ: a session-adaptive recommender over a Last.fm folksonomy tag space"
 requires-python = ">=3.12"
-dependencies = []
+# Phase 0 had no runtime dependencies. numpy and scipy arrive with Phase 1's semantic
+# space: PPMI over a sparse tags x items matrix and a truncated SVD are not things to
+# hand-roll. Nothing else is justified yet, and the live client stays dependency-free.
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.14",
+]
 
 [project.optional-dependencies]
 dev = [
