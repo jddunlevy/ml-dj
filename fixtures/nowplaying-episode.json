@@ -1,0 +1,12 @@
+{
+  "timestamp": 1759190600000,
+  "progress_ms": 120000,
+  "is_playing": true,
+  "currently_playing_type": "episode",
+  "item": {
+    "id": "3vWxYzAbCdEfGhIjKlMnOp",
+    "name": "Episode 14 - Folksonomies",
+    "duration_ms": 1800000,
+    "show": { "name": "A Podcast About Tags" }
+  }
+}

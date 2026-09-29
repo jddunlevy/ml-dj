@@ -1,0 +1,13 @@
+{
+  "timestamp": 1759190400000,
+  "progress_ms": 45000,
+  "is_playing": true,
+  "currently_playing_type": "track",
+  "item": {
+    "id": "2aBcDeFgHiJkLmNoPqRsTu",
+    "name": "Ceiling Fan",
+    "duration_ms": 213000,
+    "artists": [{ "name": "Paper Lanterns" }, { "name": "Odell" }],
+    "album": { "name": "Quiet Rooms" }
+  }
+}
