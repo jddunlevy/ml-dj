@@ -161,3 +161,39 @@ def test_build_tag_index_keeps_only_the_top_n_tags():
         client, [make_play("Odell", "Static Bloom")], top_n=3, cache_dir=None
     )
     assert index.tags("Odell", "Static Bloom") == frozenset({"tag0", "tag1", "tag2"})
+
+
+def test_build_tag_index_refuses_tracks_outside_the_track_tier():
+    # Phase 1 can give any track a vector by inheritance. Feeding those here would have the
+    # metric measure the backoff: two tracks inheriting one artist's tags overlap at 1.0 by
+    # construction, whatever the DJ did.
+    body = json.dumps({"toptags": {"tag": [{"name": "mellow", "count": 90}]}}).encode()
+    transport = FakeTransport([Response(200, body)])
+    client = LastfmClient(transport, FakeClock(), api_key="k")
+    plays = [
+        make_play("Odell", "has own tags", started_at_ms=0),
+        make_play("Odell", "inherited only", started_at_ms=1000),
+    ]
+    index = build_tag_index(
+        client,
+        plays,
+        cache_dir=None,
+        track_tier_only={track_key("Odell", "has own tags")},
+    )
+    assert index.tags("Odell", "has own tags") == frozenset({"mellow"})
+    assert index.tags("Odell", "inherited only") == frozenset()
+    # Only one request: the excluded track is never even fetched.
+    assert len(transport.requests) == 1
+
+
+def test_a_transition_into_a_non_track_tier_track_is_not_counted_as_tagged():
+    plays = [
+        make_play("Odell", "A", "skipped", started_at_ms=0),
+        make_play("Odell", "B", "completed", started_at_ms=1000),
+    ]
+    # B is not track-tier, so it has no tags and the transition is untagged - reported as
+    # such rather than scored at a spurious 1.0 overlap.
+    tags = TagIndex({track_key("Odell", "A"): frozenset({"mellow"})})
+    arm = post_skip_persistence(plays, tags).after_skip
+    assert arm.transitions == 1
+    assert arm.tagged_transitions == 0

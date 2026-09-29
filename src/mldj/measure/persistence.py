@@ -46,16 +46,30 @@ def build_tag_index(
     plays: Iterable[Play],
     top_n: int = 5,
     cache_dir: Path | None = TAGS_DIR,
+    track_tier_only: set[tuple[str, str]] | None = None,
 ) -> TagIndex:
     """Fetch top tags for every distinct track in `plays`, once each.
 
     Scoped to tracks that actually appear in captured sessions - a few hundred calls, not
     the corpus-wide pull, which belongs to Phase 1. cache_dir=None skips the disk cache.
+
+    **This index must never be filled in by backoff, and `track_tier_only` is the guard.**
+    Phase 1 can give any track a vector by inheriting tags from its album siblings or its
+    artist, which is right for recommending and wrong here: two tracks by one artist that
+    both inherited the artist's tags have a tag overlap of 1.0 *by construction*, so a
+    persistence metric fed inherited tags would be measuring the backoff rather than the DJ.
+    Pass `mldj.space.assign.track_tier_keys(assignments)` to make the restriction explicit
+    when Phase 1's assignments are available; without it the restriction still holds, because
+    `top_tags` returns nothing for an untagged track and `_arm` skips a transition whose
+    either side is untagged.
     """
     by_key: dict[tuple[str, str], frozenset[str]] = {}
     for play in plays:
         key = track_key(play.artist, play.title)
         if key in by_key:
+            continue
+        if track_tier_only is not None and key not in track_tier_only:
+            by_key[key] = frozenset()  # recorded as untagged, never inherited
             continue
         if cache_dir is None:
             rows = top_tags(client, play.artist, play.title)

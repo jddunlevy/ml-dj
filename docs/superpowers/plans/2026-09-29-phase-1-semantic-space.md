@@ -455,3 +455,43 @@ This is the gold set doing exactly the job it was built for: it caught a false p
 **The sweep: 0 of 72 points pass.** Every combination of `min_count` ∈ {2,3,5}, `min_artists` ∈ {2,3}, `min_reach` ∈ {0,200}, `include_artists` ∈ {True,False}, `rank` ∈ {50,100,150} fails the ordering. That settles it as a premise problem rather than a tuning one.
 
 The sweep also caught a reporting flaw of mine worth keeping in mind. The best `synonym − unrelated` separations (0.566 at `min_count=5`) come from configurations where **only 8 of 12 synonym pairs are still scorable** — raising `min_count` drops the rare mood tags, which are exactly the pairs the space fails on. A higher score on an easier subset is not an improvement. The sweep table now prints `scored` and `missing` next to the separation, because that artifact is precisely what `missing_terms` was built to expose and my first version of the table hid it behind a column labelled `vocab`.
+
+### Task 9 — the real build, and what it does and does not clear
+
+Phase 0's `build_tag_index` now takes `track_tier_only`. The restriction already held incidentally (`top_tags` returns nothing for an untagged track, and `_arm` skips a transition with an untagged side), but it is now explicit and enforceable, so a future change that fills the index by backoff fails a test instead of silently making the metric measure the backoff.
+
+**Final build** — `min_count=3, min_artists=3, min_reach=200, rank=150, seed=0, include_artists=True`:
+
+| | |
+|---|---|
+| vocabulary | **371 terms** (dropped: 1,520 rare, 101 too few artists, 36 too little reach) |
+| matrix | 371 × 3,024 (1,359 track columns + 1,665 artist columns) |
+| tiers | `{track: 1359, album: 810, artist: 3556, none: 106}` — **98.2% of tracks carry a vector** |
+| `space.json` | 1.2 MB, gitignored |
+| reproducible | terms and vectors byte-identical across runs; only `built_utc` differs, by design |
+
+Hyperparameters were chosen with the sweep, not by taste — but since 0 of 72 points pass the ordering, the choice is "the configuration with a usable vocabulary and the fewest leaks" rather than "the winner". `min_reach=200` and `min_artists=3` are both justified above.
+
+**`space.json` must NOT be committed.** The privacy review returns 8 of 371 terms matching a corpus artist name:
+
+- genuine leaks, 4: `radiohead`, `Kanye West`, `kendrick lamar`, `Timbaland`
+- false positives, 4: `electronic`, `Love`, `fun`, `lush` — all real bands whose names are ordinary descriptive words
+
+Four real leaks means the file publishes part of the listening history, so CLAUDE.md's condition is not met. Options for Phase 2, in order of preference: raise `min_artists` to 4 (costs ~70 terms), or drop those four terms by name at export time and record the deletion in `meta`. The second is narrower and loses less, and is auditable because the export already carries its own settings.
+
+---
+
+## Definition of done — final state
+
+- [x] `pytest` passes with no network access, no test over a second (364 tests, 2.3 s)
+- [x] `ruff check src tests` clean
+- [x] Corpus-wide tag coverage measured and recorded at all three tiers
+- [x] Every variant group collapses; every near-miss pair stays distinct
+- [x] `fixtures/tag-pairs-gold.json` has 61 pairs across all five labels, 11 complementary
+- [ ] **Level 1 FAILS** — `related` (0.409) outscores `synonym` (0.183), in every one of 72 sweep configurations. Not a tuning failure: the spec's premise that synonyms co-tag constantly is inverted in this corpus. Antonym baseline 0.023 and complementary baseline −0.026 are recorded for Phase 2.
+- [x] `space.json` builds reproducibly — byte-identical for the same inputs and seed
+- [ ] **Privacy gate not cleared** — 4 genuine artist-name leaks, so `space.json` stays uncommitted
+- [x] Hyperparameters chosen by sweep, with the numbers written into this plan
+- [x] Phase 0's persistence metric counts only track-tier transitions, enforceably
+
+**Phase 2 does not start from this plan's Task 8 assumption.** It starts from the finding that low same-item co-occurrence is produced both by opposition *and* by interchangeability, so it cannot separate them alone. The co-occurrence matrix of Task 4 and the two baselines above are still the inputs; the discriminator needs redesigning before it is built.
