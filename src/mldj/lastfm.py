@@ -1,0 +1,112 @@
+"""Last.fm API client.
+
+Two gotchas shape this module. Last.fm reports API errors inside a 200 response body
+rather than as an HTTP status, and a full history ingest is around 196 sequential
+requests, so the client paces itself instead of bursting.
+"""
+
+import hashlib
+import json
+import urllib.parse
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from mldj.clock import Clock
+from mldj.transport import Transport, retry_after_ms
+
+API_ROOT = "https://ws.audioscrobbler.com/2.0/"
+TAGS_DIR = Path("data/tags")  # gitignored
+
+
+class LastfmError(RuntimeError):
+    pass
+
+
+@dataclass
+class LastfmClient:
+    transport: Transport
+    clock: Clock
+    api_key: str
+    min_interval_ms: int = 250
+    max_attempts: int = 4
+    backoff_ms: int = 1000
+    # None, not 0: "no call yet" must stay distinguishable from "a call at t=0", or the
+    # pacing guard silently disables itself whenever the clock starts at zero.
+    _last_call_ms: int | None = field(default=None, repr=False)
+
+    def call(self, method: str, **params: str) -> dict:
+        query = urllib.parse.urlencode(
+            {"method": method, "api_key": self.api_key, "format": "json", **params}
+        )
+        url = f"{API_ROOT}?{query}"
+
+        for attempt in range(1, self.max_attempts + 1):
+            self._pace()
+            response = self.transport.get(url)
+            self._last_call_ms = self.clock.now_ms()
+
+            # A 196-page ingest reliably meets a transient Last.fm 500, so a server error
+            # or a dropped connection (status 0) is retried with an exponential backoff.
+            # A 4xx other than 429 is a real error - a bad key or username - and retrying
+            # it only wastes requests, so it raises straight away.
+            if response.status == 429 or response.status >= 500 or response.status == 0:
+                if attempt == self.max_attempts:
+                    raise LastfmError(
+                        f"{method}: HTTP {response.status} after {attempt} attempts"
+                    )
+                backoff = self.backoff_ms * 2 ** (attempt - 1)
+                wait = retry_after_ms(response, backoff) if response.status == 429 else backoff
+                self.clock.sleep_ms(wait)
+                continue
+            if response.status != 200:
+                raise LastfmError(f"{method}: HTTP {response.status}")
+
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise LastfmError(f"{method}: unreadable body")
+            if "error" in payload:
+                raise LastfmError(f"{method}: {payload.get('message', payload['error'])}")
+            return payload
+
+        raise LastfmError(f"{method}: exhausted attempts")
+
+    def _pace(self) -> None:
+        if self._last_call_ms is None:
+            return
+        wait = self.min_interval_ms - (self.clock.now_ms() - self._last_call_ms)
+        if wait > 0:
+            self.clock.sleep_ms(wait)
+
+
+def _tag_rows(payload: dict) -> list:
+    tags = (payload.get("toptags") or {}).get("tag") or []
+    return tags if isinstance(tags, list) else [tags]
+
+
+def top_tags(client: LastfmClient, artist: str, title: str) -> list[tuple[str, int]]:
+    """Tag names with their counts, highest first. An untagged track returns []."""
+    payload = client.call("track.getTopTags", artist=artist, track=title, autocorrect="1")
+    rows = [
+        (str(row.get("name", "")), int(row.get("count") or 0))
+        for row in _tag_rows(payload)
+        if isinstance(row, dict) and row.get("name")
+    ]
+    return sorted(rows, key=lambda pair: -pair[1])
+
+
+def _cache_path(cache_dir: Path, artist: str, title: str) -> Path:
+    digest = hashlib.sha1(f"{artist}\t{title}".encode()).hexdigest()[:16]
+    return cache_dir / f"{digest}.json"
+
+
+def top_tags_cached(
+    client: LastfmClient, artist: str, title: str, cache_dir: Path = TAGS_DIR
+) -> list[tuple[str, int]]:
+    """Disk-cached top_tags. Tag pulls are the slow part of Task 10; cache them."""
+    path = _cache_path(cache_dir, artist, title)
+    if path.exists():
+        return [(name, count) for name, count in json.loads(path.read_text(encoding="utf-8"))]
+    tags = top_tags(client, artist, title)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(tags), encoding="utf-8")
+    return tags

@@ -1,0 +1,25 @@
+{
+  "recenttracks": {
+    "@attr": { "user": "listener", "page": "1", "perPage": "200", "totalPages": "3", "total": "412" },
+    "track": [
+      {
+        "@attr": { "nowplaying": "true" },
+        "artist": { "#text": "Paper Lanterns" },
+        "album": { "#text": "Quiet Rooms" },
+        "name": "Ceiling Fan"
+      },
+      {
+        "artist": { "#text": "New Order" },
+        "album": { "#text": "Power, Corruption & Lies" },
+        "name": "Blue Monday",
+        "date": { "uts": "1759190400", "#text": "30 Sep 2025, 00:00" }
+      },
+      {
+        "artist": { "#text": "Odell" },
+        "album": { "#text": "" },
+        "name": "Static Bloom",
+        "date": { "uts": "1759190100", "#text": "29 Sep 2025, 23:55" }
+      }
+    ]
+  }
+}

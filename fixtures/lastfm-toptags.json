@@ -1,0 +1,11 @@
+{
+  "toptags": {
+    "@attr": { "artist": "New Order", "track": "Blue Monday" },
+    "tag": [
+      { "name": "new wave", "count": 100, "url": "https://example.invalid/1" },
+      { "name": "synthpop", "count": 92, "url": "https://example.invalid/2" },
+      { "name": "80s", "count": 71, "url": "https://example.invalid/3" },
+      { "name": "dance", "count": 40, "url": "https://example.invalid/4" }
+    ]
+  }
+}
