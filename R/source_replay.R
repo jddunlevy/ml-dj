@@ -7,6 +7,10 @@
 #' jsonlite turns a one-tag event's `tags` into a bare string and a multi-tag event's into a
 #' character vector, so the same field has two shapes depending on the data - which is exactly
 #' the bug that shows up only on the one track with a single tag.
+#'
+#' earliness is deliberately not defaulted here. `engine.R` treats a skipped event with no
+#' earliness as malformed source data and stops loudly on it; supplying a default in this
+#' module would mean that guard never sees a NULL and can never fire.
 
 read_session <- function(path) {
   if (!file.exists(path)) {
@@ -15,7 +19,7 @@ read_session <- function(path) {
   raw <- jsonlite::fromJSON(path, simplifyVector = FALSE)
   raw$events <- lapply(raw$events, function(e) {
     e$tags <- as.character(unlist(e$tags) %||% character(0))
-    e$earliness <- as.numeric(e$earliness %||% 0)
+    e$earliness <- if (is.null(e$earliness)) NULL else as.numeric(e$earliness)
     e$ts <- as.numeric(e$ts %||% 0)
     e
   })

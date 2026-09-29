@@ -21,3 +21,18 @@ test_that("a single-tag event does not collapse to a scalar of the wrong shape",
 test_that("a missing file fails loudly rather than returning empty", {
   expect_error(read_session(file.path(PROJECT_ROOT, "fixtures", "nope.json")), "no session")
 })
+
+test_that("a session with exactly one tag on one event stays a character vector", {
+  tmp <- tempfile(fileext = ".json")
+  on.exit(unlink(tmp))
+  writeLines('{
+    "label": "single-tag",
+    "events": [
+      {"ts": 1, "outcome": "completed", "tags": ["solo"]}
+    ]
+  }', tmp)
+
+  s <- read_session(tmp)
+  expect_type(s$events[[1]]$tags, "character")
+  expect_length(s$events[[1]]$tags, 1)
+})
