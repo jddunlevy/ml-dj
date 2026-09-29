@@ -367,3 +367,39 @@ Nearest neighbours that are right: `hip hop → rap 0.89` (a genuine synonym), `
 **2. Year tags pollute: `mellow → 1972 at 0.72`.** Specific years are metadata, not description, and they are numerous. They are not pure noise — `80s → 1983, 1982, 1985` is coherent — but `mellow → 1972` is spurious, and a 4-digit year is mechanically identifiable. Whether to drop them is a judgment call, so **add `drop_year_tags` to the Task 8 sweep** rather than deciding it here.
 
 **3. Organizational and residual artist tags survive:** `fav`, `Masterpiece`, `KICK`, `Big Music` are personal filing labels with no descriptive content, and `Timbaland` and `Fleetwood Mac` slipped past `min_artists=2` (a producer credited across artists, and a band tag on covers). A curated stop-list is the obvious fix and also the kind of thing that quietly encodes assumptions, so it belongs in Task 8 next to the gold set that can measure whether it helps — **and `min_artists=3` should be tried first**, since it is principled rather than hand-listed.
+
+### Task 1 (final) — corpus-wide coverage, and a correction
+
+The pull completed. Measured across all 5,831 tracks and 1,741 artists:
+
+| tier | measured | sample estimate | |
+|---|---|---|---|
+| track | **23.6%** (1,374/5,831) | 24.5% | agrees |
+| track, play-weighted | **38.4%** | 60.1% | **sample was wrong** |
+| + album backoff | **37.5%** (+811 tracks) | — | |
+| artist | **96.9%** (1,687/1,741) | 95.0% | agrees |
+
+2,105 distinct raw tag strings. **Correct the play-weighted figure wherever it is quoted:** the n=200 sample put it at 60.1%, the corpus says 38.4%. A play-weighted estimate from a sample drawn uniformly over *distinct* tracks is dominated by whichever few heavily-played tracks happen to be drawn, so it had far more variance than the per-track figure beside it. The per-track estimates were sound; that one was not. 38.4% is the number for beat 6.
+
+With `min_count=3, min_artists=2, rank=150, include_artists=True`: vocabulary 445 terms, matrix 445 × 3,029, tiers `{track: 1363, album: 810, artist: 3553, none: 105}` — **98.2% of tracks carry a vector**, and only 105 have nothing at any tier. Explained variance 0.720. `space.json` is 1.4 MB and round-trips bit-for-bit.
+
+### Task 7 — the privacy gate, and a correction to how it was specified
+
+The plan asked for a test that "no string in the export appears in the corpus as an artist **or title**". Run against the real space that flags **43 of 445 terms**, and they are two unrelated things:
+
+- genuine leaks: `radiohead`, `Kanye West`, `kendrick lamar`, `Frank Ocean`, `Daft Punk`, `Drake`, `abba`
+- pure noise: `electronic`, `Love`, `dance`, `summer`, `happy`, `classic`, `perfect`, `shoegaze`
+
+**Titles are the wrong comparison set.** They are frequently single ordinary words — `Love`, `Happy`, `Disco`, `Summer`, `Perfect` — so about 25 of those 43 are titles colliding with perfectly normal descriptive tags. Compare against **artist names only**.
+
+**And the gate must be a review list, not an automatic reject.** Even artists-only leaves irreducible false positives, because Electronic, Love, fun. and Lush are all real bands *and* ordinary descriptive words. No string comparison can separate the two senses, dropping `love` or `electronic` would gut the vocabulary, and the decision carries privacy consequences — so a person clears each match.
+
+Counts by `min_artists`:
+
+| `min_artists` | vocabulary | artist-name matches | genuine leaks | title matches (noise) |
+|---|---|---|---|---|
+| 2 | 445 | 19 | — | 27 |
+| **3** | **407** | **9** | **~5** | 25 |
+| 4 | 300 | 6 | — | 19 |
+
+`min_artists=3` costs 38 terms and cuts genuine leaks from 19 to about 5 (`radiohead`, `Kanye West`, `kendrick lamar`, `Phoebe Bridgers`, `Timbaland`). It also removes the `swedish ~ abba` residue noted under Task 5. **Take 3 as the sweep's starting point, and expect to clear a short review list by hand before `space.json` can be committed.**
