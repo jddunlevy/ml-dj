@@ -267,3 +267,26 @@ Then run the real thing and record the outcome:
 - [ ] Phase 0's persistence metric counts only track-tier transitions, and the report says so
 
 Phase 2 starts from the co-occurrence matrix of Task 4 and the antonym and complementary baselines of Task 8.
+
+---
+
+## Observed during implementation
+
+### Task 1 — coverage, partway through the pull
+
+From 3,276 tracks fetched of 5,831: **29.7% of fetched tracks carry track-level tags**, consistent with the 24.5% random-sample estimate. The **album tier already rescues 693 untagged tracks**, lifting coverage from 6.8% to 18.7% against the full corpus — the backoff earns its place before the artist tier is even populated.
+
+### Task 2 — vocabulary size against `min_count`, real data
+
+From the same partial cache (1,626 raw tag strings). Counts scale roughly 1.5× when the pull completes, so read these as a lower bound:
+
+| `min_count` | terms kept | dropped |
+|---|---|---|
+| 1 | 1,567 | 0 |
+| 3 | 386 | 1,181 |
+| 5 | 257 | 1,310 |
+| 10 | 142 | 1,425 |
+
+**This matters for Task 8's sweep, and shifts the expected answer.** The plan's `min_count=5` default leaves only ~257 terms (perhaps ~330 once the pull finishes), which is a small vocabulary for a space meant to carry gradable predicates, polysemy and antonymy. `min_count=3` roughly doubles it. The hapax tail is genuinely uninformative, but the drop from 1,567 to 257 is steep enough that **the sweep should include `min_count` 2 and 3, not just 5 and up** — and the rank ceiling follows from it, since truncated SVD needs `rank < len(vocab)`.
+
+Normalization measurably works on real tags: 50 canonical terms absorb more than one raw spelling, `rnb` alone absorbing six (`RB`, `r n b`, `r&b`, `r'n'b`, `rhythm and blues`, `rnb`), and `80s` absorbing `80's`.

@@ -1,0 +1,34 @@
+{
+  "note": "variant_groups must each collapse to a single canonical term. near_misses must each stay two distinct terms. Only orthographic variation collapses here; deciding that two different words mean the same thing is the semantic space's job, not the normalizer's.",
+  "variant_groups": [
+    { "hint": "hip hop", "members": ["hip hop", "hip-hop", "hiphop", "Hip Hop", "HIP-HOP", "hip_hop"] },
+    { "hint": "lo-fi", "members": ["lo-fi", "lofi", "Lo-Fi", "lo fi", "LOFI"] },
+    { "hint": "chill-out", "members": ["chillout", "chill-out", "chill out", "Chillout"] },
+    { "hint": "r&b", "members": ["r&b", "rnb", "R&B", "rhythm and blues", "RnB"] },
+    { "hint": "drum and bass", "members": ["drum and bass", "dnb", "drum'n'bass", "drum & bass", "DnB"] },
+    { "hint": "female vocalist", "members": ["female vocalist", "female vocalists", "Female Vocalist"] },
+    { "hint": "male vocalist", "members": ["male vocalist", "male vocalists", "Male Vocalists"] },
+    { "hint": "80s", "members": ["80s", "1980s", "eighties", "80S"] },
+    { "hint": "90s", "members": ["90s", "1990s", "nineties"] },
+    { "hint": "post-rock", "members": ["post-rock", "post rock", "postrock", "Post-Rock"] },
+    { "hint": "singer-songwriter", "members": ["singer-songwriter", "singer songwriter", "singersongwriter"] },
+    { "hint": "sci-fi", "members": ["sci-fi", "scifi", "sci fi"] },
+    { "hint": "trip-hop", "members": ["trip-hop", "trip hop", "triphop"] },
+    { "hint": "shoegaze", "members": ["shoegaze", "Shoegaze", "shoegazing"] },
+    { "hint": "bjork (diacritics)", "members": ["björk", "bjork", "BJÖRK"] }
+  ],
+  "near_misses": [
+    { "pair": ["chill", "chillout"], "why": "chillout is a derived word, not a spelling of chill" },
+    { "pair": ["chill", "chillwave"], "why": "a genre, not a mood" },
+    { "pair": ["mellow", "chill"], "why": "plausible synonyms - the space must decide, not the normalizer" },
+    { "pair": ["dream pop", "dreamcore"], "why": "polysemy of dream" },
+    { "pair": ["post rock", "post punk"], "why": "shared prefix only" },
+    { "pair": ["electronic", "electronica"], "why": "derivational, and they are used differently" },
+    { "pair": ["hard rock", "hardcore"], "why": "shared word, different genres" },
+    { "pair": ["indie", "indie pop"], "why": "one is a subset of the other, not a variant" },
+    { "pair": ["synth pop", "synthwave"], "why": "shared prefix only" },
+    { "pair": ["trip hop", "hip hop"], "why": "collapsing these would be a disaster" },
+    { "pair": ["male vocalist", "female vocalist"], "why": "the complementary-pair trap; must stay distinct" },
+    { "pair": ["heavy metal", "heavy"], "why": "heavy is a gradable predicate, heavy metal is a genre" }
+  ]
+}
