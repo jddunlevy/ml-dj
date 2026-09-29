@@ -905,9 +905,20 @@ Run it:
 
 Run: `"C:\Program Files\R\R-4.5.3\bin\Rscript.exe" run-tests.R`
 
-Expected: PASS. Then prove the test actually bites — temporarily change `decay = 0.85` to `0.5` in
-`session_new`'s default, re-run, confirm the parity test FAILS, and change it back. A golden test
-that cannot fail is worse than none.
+Expected: PASS. Then prove the test actually bites.
+
+**Do not do this by changing `session_new`'s default `decay`.** The parity test passes
+`decay = golden$decay` explicitly, so the default is never exercised and the test keeps passing —
+a false negative that reads as "the golden test is inert" when it is fine. Change the *body* of
+`session_step` instead, which runs whatever the arguments are:
+
+```r
+  v <- state$v * state$decay * 0.5   # temporary, revert immediately
+```
+
+Re-run, confirm the parity test FAILS with term-order and cosine mismatches, then revert and
+confirm `git diff R/engine.R` is empty before committing. A golden test that cannot fail is worse
+than none.
 
 - [ ] **Step 5: Commit**
 
