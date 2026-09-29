@@ -40,6 +40,7 @@ node_modules/
 .Rproj.user/
 .Rhistory
 .RData
+preview/
 
 # --- os ---
 .DS_Store
