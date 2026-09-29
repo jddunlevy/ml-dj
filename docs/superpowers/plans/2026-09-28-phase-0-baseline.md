@@ -1242,7 +1242,7 @@ def token_provider(
 Run: `.venv/Scripts/python.exe -m pytest tests/test_auth.py -v`
 Expected: PASS — 17 passed
 
-- [ ] **Step 5: Verify against the real Spotify app, once** — BLOCKED, see Open blockers
+- [x] **Step 5: Verify against the real Spotify app, once**
 
 This is the step that confirms the credential and redirect URI are right before a listening session depends on them.
 
@@ -1833,7 +1833,7 @@ Turns raw polls into `Play` records. The rule from the spec is "the track change
 
 `outcome` is exactly one of `"completed"`, `"skipped"`, `"unknown"`. `reason` is non-empty only when `outcome == "unknown"`.
 
-- [ ] **Step 1: Write the fixture session**
+- [x] **Step 1: Write the fixture session**
 
 Create `fixtures/session-dj-sample.jsonl`. This is hand-built and anonymized. It deliberately declares a 30000 ms interval so a full 3-minute track needs only a handful of poll lines and the fixture stays readable; the logic is duration-relative, so the slow interval changes nothing it exercises. It covers, in order: a completion, an early skip, a late skip, an ad interruption, a capture gap, and a truncated final track.
 
@@ -1862,7 +1862,7 @@ Create `fixtures/session-dj-sample.jsonl`. This is hand-built and anonymized. It
 {"t":608000,"type":"session_end","reason":"stopped"}
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `tests/test_skips.py`:
 
@@ -1997,12 +1997,12 @@ def test_a_zero_duration_run_produces_no_play():
     assert derive_plays(events) == []
 ```
 
-- [ ] **Step 3: Run them to verify they fail**
+- [x] **Step 3: Run them to verify they fail**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_skips.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'mldj.skips'`
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `src/mldj/skips.py`:
 
@@ -2188,12 +2188,12 @@ def load_plays(paths: Iterable[Path], grace_ms: int = GRACE_MS) -> list[Play]:
     return sorted(all_plays(), key=lambda p: p.started_at_ms)
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_skips.py -v`
 Expected: PASS — 12 passed
 
-- [ ] **Step 6: Sanity-check against your real captured session**
+- [x] **Step 6: Sanity-check against your real captured session**
 
 ```bash
 .venv/Scripts/python.exe -c "from mldj.skips import load_plays, session_files; from collections import Counter; p=load_plays(session_files(label='dj')); print(len(p),'plays'); print(Counter(x.outcome for x in p)); print(Counter(x.reason for x in p if x.reason))"
@@ -2201,7 +2201,7 @@ Expected: PASS — 12 passed
 
 Expected: a plausible mix. If `unknown` dominates, read the reasons — a flood of `capture gap` means the poll interval is tripping rate limits, and a flood of `stale` means the loop is being starved. Note the numbers; Task 12 formalizes this check.
 
-- [ ] **Step 7: Lint, then commit**
+- [x] **Step 7: Lint, then commit**
 
 ```bash
 .venv/Scripts/python.exe -m ruff check src tests
@@ -2234,7 +2234,7 @@ git commit -m "feat: derive plays and skip outcomes from raw poll logs"
   - `mldj.match.same_track(a: tuple[str, str], b: tuple[str, str]) -> bool`
   - `mldj.match.QUALIFIER_WORDS`, `mldj.match.STRONG_QUALIFIERS`, `mldj.match.NEVER_DROP` — frozensets, extended when the gold set catches a miss
 
-- [ ] **Step 1: Write the gold set**
+- [x] **Step 1: Write the gold set**
 
 Create `fixtures/match-gold.json`:
 
@@ -3275,15 +3275,17 @@ The report's numbers are then beat 3's evidence. Phase 1 starts from `docs/super
 
 Recorded 2026-09-29, while executing Tasks 1-5.
 
-### 1. The Spotify app's redirect URI does not include port 8888
+### 1. ~~The Spotify app's redirect URI does not include port 8888~~ — RESOLVED 2026-09-29
 
-**Blocks:** Task 4 Step 5 (verify auth against the real app), Task 5 Step 9 (capture a real session), and therefore the whole measurement chain.
+A new Spotify app was created for this project rather than reusing `cd-player`'s, with
+`http://127.0.0.1:8888/callback` registered on it, and its client ID is in `.env.local`.
+Verified end to end: the PKCE flow completes, a refresh token comes back, and a live
+`currently-playing` call returns HTTP 204 — so the `user-read-currently-playing` scope
+works. `data/.spotify-tokens.json` is caught by `.gitignore:11`.
 
-`cd-player`'s registered redirect URI is `http://127.0.0.1:5173/callback` (`cd-player/src/config.ts:5`). Phase 0 uses `http://127.0.0.1:8888/callback`, which the spec, `CLAUDE.md`, and `.env.local.example` all state must match exactly. Unless that app already has a second URI registered, authorization will fail with `INVALID_CLIENT: Invalid redirect URI`.
-
-**Fix:** at https://developer.spotify.com/dashboard, open the app whose client ID is now in `.env.local`, and add `http://127.0.0.1:8888/callback` to its Redirect URIs. Spotify allows several per app, so `cd-player`'s `:5173` entry can stay. Then run Task 4 Step 5.
-
-An alternative — pointing Phase 0 at `:5173` instead — was rejected: the port is written into the spec and `.env.local.example`, and Phase 4's browser client will want `:5173` free for Vite.
+A new app has no Audio Features, Recommendations, or Related Artists access. That costs
+this project nothing: the feature space is the Last.fm tag graph by design. It does turn
+spec open question 1 from an assumption into a fact, ahead of Phase 3.
 
 ### 2. The Last.fm credentials are not set
 
