@@ -29,6 +29,23 @@ from mldj.events import SESSIONS_DIR, read_events
 from mldj.nowplaying import NowPlaying, interpolate_progress
 
 GRACE_MS = 3000
+
+# Crossfade makes the end of a track unobservable. Spotify starts the next one before the
+# current finishes, so capture sees the change early and a natural completion looks short by
+# the crossfade length. Measured on dj-20260930T142116Z, the shortfalls of everything the
+# absolute grace alone called `skipped` split into two populations 173 seconds apart - 6-29s
+# on one side, 202-298s on the other. The left cluster is the crossfade, the right is the
+# next button, and nothing at all sits between them.
+#
+# This is a fractional floor rather than a bigger GRACE_MS because the two rules fail on
+# opposite ends of the duration range: an absolute grace wide enough for a crossfade swallows
+# most of a 40-second interlude, and a fraction alone leaves that same interlude a "skip" six
+# seconds from the end. Both apply; either one is enough to call a track completed.
+#
+# It moves the headline skip rate DOWN, which flatters the DJ rather than this project's
+# argument - the safe direction for a threshold that had to be chosen rather than derived.
+# A listener with crossfade off should tighten it; `mldj report --completion-fraction` does.
+COMPLETION_FRACTION = 0.85
 SEEK_TOLERANCE_MS = 2000
 ASSUMED_INTERVAL_MS = 1000  # only used if a log has no session_start
 
@@ -82,6 +99,7 @@ def _close_run(
     session: str,
     label: str,
     grace_ms: int,
+    completion_fraction: float,
     taint: str,
 ) -> Play | None:
     last = run[-1]
@@ -97,9 +115,14 @@ def _close_run(
     if not reason and _moved_backwards(run):
         reason = "progress moved backwards (seek or restart)"
 
+    # Order matters: an ambiguous run stays unknown however complete it looks. The
+    # crossfade allowance decides between completed and skipped, never between unknown and
+    # anything else, so it cannot promote a doubtful record into a positive claim.
     if reason:
         outcome = "unknown"
     elif listened_ms >= duration_ms - grace_ms:
+        outcome = "completed"
+    elif listened_ms >= duration_ms * completion_fraction:
         outcome = "completed"
     else:
         outcome = "skipped"
@@ -119,7 +142,11 @@ def _close_run(
     )
 
 
-def derive_plays(events: Iterable[dict], grace_ms: int = GRACE_MS) -> list[Play]:
+def derive_plays(
+    events: Iterable[dict],
+    grace_ms: int = GRACE_MS,
+    completion_fraction: float = COMPLETION_FRACTION,
+) -> list[Play]:
     """Walk a session's events in order and emit one Play per contiguous track run."""
     plays: list[Play] = []
     interval_ms = ASSUMED_INTERVAL_MS
@@ -132,7 +159,8 @@ def derive_plays(events: Iterable[dict], grace_ms: int = GRACE_MS) -> list[Play]
         nonlocal run, taint
         if run:
             play = _close_run(
-                run, at_ms, interval_ms, session, label, grace_ms, taint or successor_taint
+                run, at_ms, interval_ms, session, label, grace_ms, completion_fraction,
+                taint or successor_taint,
             )
             if play is not None:
                 plays.append(play)
