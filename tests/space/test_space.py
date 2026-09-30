@@ -244,3 +244,28 @@ def test_leaking_terms_also_flags_a_band_named_with_an_ordinary_word():
     # The band Electronic exists, so this matches - and is a false positive a human must
     # clear rather than something to drop automatically.
     assert leaking_terms(with_descriptor, forbidden={"Electronic"}) == ["electronic"]
+
+
+def test_the_space_records_how_many_terms_were_dropped_as_nondescriptive():
+    """Provenance, not bookkeeping. The other three drop reasons are already in meta, and a
+    stoplist is the one a reader is most entitled to be suspicious of - so the count of what
+    it removed has to travel with the space."""
+    from mldj.space.build import CorpusTags, build_space
+    from mldj.scrobbles import Scrobble
+
+    scrobbles = [Scrobble(uts=i, artist=f"a{i % 4}", title=f"t{i}", album="x")
+                 for i in range(12)]
+    track_tags = {(f"a{i % 4}", f"t{i}"): [("shoegaze", 100), ("2013", 100), ("best", 100)]
+                  for i in range(12)}
+    corpus = CorpusTags(
+        scrobbles=scrobbles,
+        track_tags=track_tags,
+        artist_tags={f"a{i}": [("dreampop", 100)] for i in range(4)},
+        raw_counts={"shoegaze": 12, "2013": 12, "best": 12, "dreampop": 12},
+        artist_spread={"shoegaze": 4, "2013": 4, "best": 4, "dreampop": 4},
+        tag_reach={},
+    )
+    space = build_space(corpus, min_count=1, min_artists=1, rank=2, seed=0)
+
+    assert space.meta["vocabulary_dropped"]["nondescriptive"] == 2  # 2013 and best
+    assert "2013" not in space.terms and "best" not in space.terms

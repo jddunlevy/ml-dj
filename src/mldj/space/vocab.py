@@ -21,6 +21,7 @@ The contract is fixtures/tag-vocab-gold.json: every variant group must collapse 
 term, and every near-miss pair must stay two.
 """
 
+import re
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -76,6 +77,35 @@ VARIANTS: Mapping[str, str] = {
     "prog": "progressive",
     "psych": "psychedelic",
 }
+
+
+# Tags that say something about the listener rather than the music. They are dropped from
+# the vocabulary, not merged - there is nothing to merge them with.
+#
+# This is not a job min_reach can do. Reach measures how many people used a tag, and these
+# pass easily: `best` has a reach of 7673, `seattle` 6927. They fail a different test. A
+# min_reach high enough to remove them (8000) costs 19 of the 61 scorable gold pairs and
+# drops 196 terms to be rid of 12 - the "higher score on a smaller subset" trap, exactly.
+#
+# The line is approval and ownership, not subjectivity. `best`, `amazing` and `cool` rate a
+# track; `loved` and `personal favourites` file it. `beautiful` and `mellow` describe how it
+# sounds, however arguably, and stay. `love` stays too: it is a theme, and it is one of the
+# four ordinary words that are also real band names.
+NONDESCRIPTIVE: frozenset[str] = frozenset({
+    "best", "amazing", "cool", "awesome", "great", "favourite", "favourites",
+    "favorite", "favorites", "myfavourites", "myfavorites", "personalfavourites",
+    "personalfavorites", "loved", "favoritesongs", "mymusic", "77davezalltracks",
+})
+
+# A release year describes when, not what. Decades are different and deliberately kept -
+# VARIANTS folds "eighties" and "1980s" onto `80s` - so the rule matches a bare four-digit
+# year only, leaving `80s`, `10s`, `808` and `27` alone.
+YEAR = re.compile(r"(?:19|20)\d\d\Z")
+
+
+def is_nondescriptive(term: str) -> bool:
+    """True for a canonical term that rates or files a track instead of describing it."""
+    return term in NONDESCRIPTIVE or YEAR.match(term) is not None
 
 
 def normalize_tag(tag: str) -> str:
@@ -135,6 +165,7 @@ class Vocabulary:
     # export and the gold-set reports legible.
     display: Mapping[str, str] = field(default_factory=dict)
     dropped: int = 0  # dropped for falling below min_count
+    dropped_as_nondescriptive: int = 0  # dropped for rating or filing rather than describing
     dropped_by_spread: int = 0  # dropped for being attested by too few artists
     dropped_by_reach: int = 0  # dropped for being used by too few Last.fm users
 
@@ -171,6 +202,12 @@ def build_vocabulary(
             continue
         totals[term] += count
         spellings.setdefault(term, Counter())[raw] += count
+
+    # Before min_count, so the count reported is every non-descriptive term seen rather than
+    # only the ones that happened to clear the frequency bar.
+    nondescriptive = {term for term in totals if is_nondescriptive(term)}
+    for term in nondescriptive:
+        del totals[term]
 
     frequent = {term: total for term, total in totals.items() if total >= min_count}
 
@@ -211,6 +248,7 @@ def build_vocabulary(
         counts={term: kept[term] for term in ordered},
         display={term: spellings[term].most_common(1)[0][0] for term in ordered},
         dropped=len(totals) - len(frequent),
+        dropped_as_nondescriptive=len(nondescriptive),
         dropped_by_spread=len(frequent) - len(kept) - dropped_reach,
         dropped_by_reach=dropped_reach,
     )

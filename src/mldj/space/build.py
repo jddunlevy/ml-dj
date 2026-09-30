@@ -135,6 +135,7 @@ def build_space(
                 "rare": vocab.dropped,
                 "too_few_artists": vocab.dropped_by_spread,
                 "too_little_reach": vocab.dropped_by_reach,
+                "nondescriptive": vocab.dropped_as_nondescriptive,
             },
             "item_counts": dict(Counter(matrix.item_kinds)),
             "tier_counts": tier_counts(assignments),

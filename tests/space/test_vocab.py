@@ -207,3 +207,60 @@ def test_the_two_drop_reasons_are_reported_separately():
     assert vocab.dropped == 1  # rare, below min_count
     assert vocab.dropped_by_spread == 1  # weezer, one artist
     assert len(vocab) == 1
+
+
+# Non-descriptive tags. min_reach cannot catch these: `best` has a reach of 7673 and
+# `seattle` 6927, so plenty of people used them - they fail a different test, which is
+# whether they say anything about the music. A min_reach high enough to remove them
+# (8000) costs 19 of the 61 scorable gold pairs, dropping 196 terms to be rid of 12.
+
+
+def test_a_bare_year_is_not_a_description_of_music():
+    vocab = build_vocabulary({"2013": 40, "shoegaze": 40}, min_count=5)
+    assert vocab.terms == ("shoegaze",)
+    assert vocab.dropped_as_nondescriptive == 1
+
+
+def test_every_plausible_release_year_is_caught_by_the_rule_not_a_list():
+    counts = {str(y): 40 for y in (1969, 1984, 1999, 2004, 2013, 2026)}
+    assert len(build_vocabulary(counts, min_count=5)) == 0
+
+
+def test_a_decade_survives_because_it_describes_a_sound():
+    # 80s and 90s are deliberate, curated terms - VARIANTS folds "eighties" and "1980s"
+    # onto them. The year rule must not take them with it.
+    vocab = build_vocabulary({"80s": 40, "90s": 40, "10s": 40}, min_count=5)
+    assert set(vocab.terms) == {"80s", "90s", "10s"}
+
+
+def test_a_number_that_is_not_a_year_survives():
+    vocab = build_vocabulary({"1989": 40, "808": 40, "27": 40}, min_count=5)
+    assert "808" in vocab.terms and "27" in vocab.terms
+
+
+def test_approval_and_collection_tags_are_dropped():
+    counts = {"best": 40, "loved": 40, "personal favourites": 40, "77davez-all-tracks": 40}
+    assert len(build_vocabulary(counts, min_count=5)) == 0
+
+
+def test_love_survives_because_it_names_a_band_and_a_theme():
+    # CLAUDE.md flags `Love` among four terms that look like artist names but are ordinary
+    # words doing real work. It is a theme, not a rating, and must not be swept up with
+    # `loved` and `best`.
+    vocab = build_vocabulary({"love": 40}, min_count=5)
+    assert vocab.terms == ("love",)
+
+
+def test_a_genre_that_merely_contains_a_stopword_survives():
+    # Substring matching would take `lovesong` and `bestof` with it. The stoplist is exact.
+    vocab = build_vocabulary({"lovesongs": 40, "lovemetal": 40}, min_count=5)
+    assert len(vocab) == 2
+
+
+def test_nondescriptive_drops_are_counted_separately_from_the_other_reasons():
+    vocab = build_vocabulary(
+        {"2013": 40, "rare": 1, "shoegaze": 40}, min_count=5
+    )
+    assert vocab.dropped == 1  # rare
+    assert vocab.dropped_as_nondescriptive == 1  # 2013
+    assert vocab.terms == ("shoegaze",)
