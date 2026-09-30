@@ -5,15 +5,15 @@ SESSION_PATH <- Sys.getenv("MLDJ_SESSION", "fixtures/session-synthetic.json")
 CANDS_PATH   <- Sys.getenv("MLDJ_CANDIDATES", "fixtures/candidates-synthetic.json")
 
 space <- load_space(Sys.getenv("MLDJ_SPACE", "space.json"))
-session <- read_session(SESSION_PATH)
+replay <- read_session(SESSION_PATH)
 candidates <- read_candidates(CANDS_PATH)
 layout_df <- space_layout(space)
-N_EVENTS <- length(session$events)
+N_EVENTS <- length(replay$events)
 
 # Every prefix state, recomputed only when decay or w changes. The scrubber is then a lookup,
 # not a fold over the whole session on every frame.
 all_states <- function(decay, w) {
-  Reduce(function(s, e) session_step(s, e), session$events,
+  Reduce(function(s, e) session_step(s, e), replay$events,
          session_new(space, decay = decay, w = w), accumulate = TRUE)[-1]
 }
 
@@ -64,24 +64,24 @@ ui <- shiny::fluidPage(
   )
 )
 
-server <- function(input, output, session_) {
+server <- function(input, output, session) {
   th <- shiny::reactive(THEMES[[input$theme %||% "notebook"]])
   shiny::observeEvent(input$theme, {
-    session_$sendCustomMessage("theme", input$theme)
+    session$sendCustomMessage("theme", input$theme)
   })
 
   states <- shiny::reactive(all_states(input$decay %||% 0.85, input$w %||% 1))
   state <- shiny::reactive(states()[[input$step]])
-  event <- shiny::reactive(session$events[[input$step]])
+  event <- shiny::reactive(replay$events[[input$step]])
   nxt <- shiny::reactive({
     i <- input$step + 1
-    if (i > N_EVENTS) NULL else session$events[[i]]
+    if (i > N_EVENTS) NULL else replay$events[[i]]
   })
 
   # N_EVENTS, not length(states) - states is a reactive, so length() on it is always 1 and
   # the header would read "3 / 1" for the whole demo.
   output$ident <- shiny::renderText(
-    paste(session$session, "·", session$label, "·", input$step, "/", N_EVENTS)
+    paste(replay$session, "·", replay$label, "·", input$step, "/", N_EVENTS)
   )
 
   output$track <- shiny::renderUI({
@@ -97,7 +97,7 @@ server <- function(input, output, session_) {
   output$stats <- shiny::renderUI({
     h <- state()$history
     outcomes <- vapply(h, function(e) e$outcome, character(1))
-    row <- function(k, v) shiny::div(class = "kv", shiny::b(k), shiny::span(v))
+    row <- function(k, v) shiny::div(class = "kv", shiny::tags$b(k), shiny::span(v))
     shiny::tagList(
       row("tracks", length(h)),
       row("skipped", sum(outcomes == "skipped")),
