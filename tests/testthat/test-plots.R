@@ -124,3 +124,40 @@ test_that("plot_constellation returns a ggplot", {
   lay <- space_layout(sp)
   expect_s3_class(plot_constellation(lay, trail_data(sp, lay, states[-1])), "ggplot")
 })
+
+test_that("the backdrop plots only the labelled terms, not the whole vocabulary", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  events <- read_session(file.path(PROJECT_ROOT, "fixtures", "session-synthetic.json"))$events
+  states <- Reduce(function(s, e) session_step(s, e), events, session_new(sp), accumulate = TRUE)
+  lay <- space_layout(sp)
+  p <- plot_constellation(lay, trail_data(sp, lay, states[-1]))
+
+  # 285 of 367 terms sit within 10% of the span of the median point, so drawing them all
+  # produces a grey blob at the origin that no amount of label thinning fixes. A point the
+  # audience cannot attach a name to carries no information and costs legibility.
+  expect_equal(nrow(ggplot2::layer_data(p, 1)), sum(lay$label))
+  expect_lt(nrow(ggplot2::layer_data(p, 1)), nrow(lay))
+})
+
+test_that("labelled terms clear an exclusion ellipse, not a circle", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  d <- space_layout(sp)
+  lab <- d[d$label, ]
+  span <- max(diff(range(d$x)), diff(range(d$y)))
+
+  # Rendered labels are far wider than they are tall, so two points separated well enough
+  # vertically can still have their text run together horizontally ("female vocalists" over
+  # "beautiful" did exactly this). The keep rule uses an ellipse matching that geometry.
+  a <- 2.4 * 0.095 * span
+  b <- 1.1 * 0.095 * span
+  for (i in seq_len(nrow(lab))) {
+    for (j in seq_len(nrow(lab))) {
+      if (i >= j) next
+      dx <- lab$x[i] - lab$x[j]
+      dy <- lab$y[i] - lab$y[j]
+      expect_gte((dx / a)^2 + (dy / b)^2, 1)
+    }
+  }
+})

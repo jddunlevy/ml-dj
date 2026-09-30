@@ -127,17 +127,28 @@ space_basis_reset <- .space_basis_impl$reset
 #' Terms in 2-D, with a greedy de-collision pass choosing which get labels. Character cells and
 #' text labels both collide; picking labels by separation is cheaper and more predictable than
 #' a repulsion solver, and it degrades gracefully when the space changes.
+#'
+#' The exclusion zone is an ellipse, not a circle, because what actually collides on screen is
+#' rendered text and text is far wider than it is tall. A circle sized to stop vertical overlap
+#' leaves "female vocalists" running straight through "beautiful"; sizing it to stop horizontal
+#' overlap instead would throw away most of the plot's vertical structure. WIDE and FLAT are the
+#' semi-axes as multiples of min_sep, so the rule is stricter across than it is up and down.
+WIDE <- 2.4
+FLAT <- 1.1
+
 space_layout <- function(space, n_labels = 26, min_sep = 0.095) {
   b <- space_basis(space)
   xy <- b$xy
   span <- max(diff(range(xy[, 1])), diff(range(xy[, 2])))
+  a <- WIDE * min_sep * span
+  h <- FLAT * min_sep * span
 
   keep <- integer(0)
   for (i in seq_len(nrow(xy))) {
     if (length(keep) >= n_labels) break
     if (length(keep) > 0) {
-      d <- sqrt((xy[i, 1] - xy[keep, 1])^2 + (xy[i, 2] - xy[keep, 2])^2)
-      if (min(d) < min_sep * span) next
+      inside <- ((xy[i, 1] - xy[keep, 1]) / a)^2 + ((xy[i, 2] - xy[keep, 2]) / h)^2
+      if (min(inside) < 1) next
     }
     keep <- c(keep, i)
   }
@@ -175,8 +186,13 @@ plot_constellation <- function(layout_df, trail_df, th = THEMES$notebook) {
   skips <- trail_df[trail_df$outcome == "skipped", , drop = FALSE]
 
   ggplot2::ggplot() +
-    ggplot2::geom_point(data = layout_df, ggplot2::aes(x, y), colour = th$muted,
-                        size = 1.2, alpha = .5) +
+    # Only the labelled subset is drawn. 285 of the 367 terms fall within 10% of the span of
+    # the median point, so plotting the full vocabulary made a grey blob at the origin, and
+    # thinning n_labels never touched it - that only removes text from points already drawn.
+    # An unlabelled point tells the audience "something is here" and nothing else, which is
+    # not worth the legibility it costs. Slightly more solid now that each point has a name.
+    ggplot2::geom_point(data = lab, ggplot2::aes(x, y), colour = th$muted,
+                        size = 1.5, alpha = .75) +
     ggplot2::geom_text(data = lab, ggplot2::aes(x, y, label = tag), family = MONO,
                        size = 2.4, colour = th$muted, vjust = -1) +
     ggplot2::geom_path(data = trail_df, ggplot2::aes(x, y), colour = th$accent,
