@@ -11,9 +11,32 @@ read_candidates <- function(path) {
   raw <- jsonlite::fromJSON(path, simplifyVector = FALSE)
   lapply(raw$candidates, function(c) {
     c$tags <- as.character(unlist(c$tags) %||% character(0))
+    c$key <- as.character(unlist(c$key) %||% character(0))
     c$novel <- isTRUE(c$novel)
     c
   })
+}
+
+#' The pool's strings come from Last.fm and the DJ's pick comes from Spotify capture, so the
+#' two name one track two ways - "Blue Monday - 2016 Remaster" against "Blue Monday". Both
+#' `mldj candidates` and `mldj export-session` emit `key` from match.track_key precisely so R
+#' never has to know that; R compares keys and owns no matcher of its own. A second
+#' implementation of match.py in a second language is free to drift from the first, and the
+#' failure is silent: a missed join reads as "the DJ's pick was not in the pool", which is the
+#' pitch's headline claim quietly vanishing.
+#'
+#' Raw strings remain the fallback for hand-written fixtures and for any pool predating the
+#' key. Falling back per row rather than wholesale means a keyed pool still joins correctly
+#' when a single row lacks one.
+matches_actual <- function(candidates, actual) {
+  vapply(candidates, function(c) {
+    ck <- as.character(c$key %||% character(0))
+    ak <- as.character(actual$key %||% character(0))
+    if (length(ck) == 2 && length(ak) == 2) {
+      return(identical(ck, ak))
+    }
+    identical(c$artist, actual$artist) && identical(c$title, actual$title)
+  }, logical(1))
 }
 
 #' epsilon is the exploration knob the parent spec makes user-visible: the amount a
@@ -41,13 +64,12 @@ rank_candidates <- function(space, v, candidates, actual = NULL, epsilon = 0) {
     novel  = novel,
     score  = score + epsilon * novel, stringsAsFactors = FALSE
   )
+  # Computed before the sort, against the candidate list, so the flag follows its own row
+  # rather than a position that reordering would invalidate.
+  d$is_actual <- if (is.null(actual)) rep(FALSE, nrow(d)) else matches_actual(candidates, actual)
+
   d <- d[order(-d$score), ]
   d$rank <- seq_len(nrow(d))
-  d$is_actual <- if (is.null(actual)) {
-    rep(FALSE, nrow(d))
-  } else {
-    d$artist == actual$artist & d$title == actual$title
-  }
   rownames(d) <- NULL
   d[, c("rank", "artist", "title", "score", "novel", "is_actual")]
 }

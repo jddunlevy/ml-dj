@@ -47,3 +47,19 @@ def test_novel_is_false_when_history_has_heard_it():
         [_play("completed", 200_000)], lambda a, t: [], was_heard=lambda a, t: True
     )
     assert events[0]["novel"] is False
+
+
+def test_each_event_carries_the_normalized_join_key():
+    # Pairs with the key on each candidate: R flags the DJ's actual pick by comparing these,
+    # never by comparing raw Spotify strings against Last.fm ones.
+    from mldj.match import track_key
+
+    play = Play(
+        track_id="t1", title="Blue Monday - 2016 Remaster", artist="New Order",
+        duration_ms=200_000, started_at_ms=1_000, ended_at_ms=2_000,
+        listened_ms=200_000, outcome="completed", session="dj-x", label="dj", reason="",
+    )
+    events = session_events([play], lambda a, t: ["dreampop"])
+    assert events[0]["key"] == list(track_key("New Order", "Blue Monday"))
+    # The raw strings are untouched - the key is for joining, the strings are for display.
+    assert events[0]["title"] == "Blue Monday - 2016 Remaster"

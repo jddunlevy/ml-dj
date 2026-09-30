@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from mldj.match import track_key
 from mldj.space.vocab import canonical_tag
 
 CANDIDATES_DIR = Path("data/candidates")  # gitignored; derived from captured listening
@@ -56,7 +57,21 @@ def candidate_pool(
             if not tags:
                 continue
             heard = was_heard(artist, title) if was_heard is not None else False
-            pool.append({"artist": artist, "title": title, "tags": tags, "novel": not heard})
+            pool.append(
+                {
+                    "artist": artist,
+                    "title": title,
+                    # The normalized join key travels with the row. These strings come from
+                    # Last.fm; the session's come from Spotify capture, and R joins the two to
+                    # flag the DJ's actual pick. R has no matcher and must not grow one -
+                    # a second implementation of match.py is free to drift from this one, and
+                    # a silent join failure reads as "the pick was not in the pool", which is
+                    # the pitch's headline claim quietly disappearing.
+                    "key": list(track_key(artist, title)),
+                    "tags": tags,
+                    "novel": not heard,
+                }
+            )
     return pool
 
 

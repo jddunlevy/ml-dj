@@ -89,3 +89,23 @@ def test_similar_for_is_called_once_per_distinct_artist_not_once_per_event():
     assert calls == ["A", "B"]
     # Deduplicating the seeds must not change the result, only the number of calls.
     assert [(c["artist"], c["title"]) for c in pool] == [("C", "3"), ("D", "4")]
+
+
+def test_each_candidate_carries_the_normalized_join_key():
+    # The pool's strings come from Last.fm; `actual` comes from Spotify capture. R joins the
+    # two to flag "the DJ played the one this engine ranked 47th", and R has no matcher -
+    # porting match.py would be a second implementation free to drift. So the key travels
+    # with the data, computed once, here.
+    similar = {"A": [("New Order", "Blue Monday")], "B": []}
+    pool = candidate_pool(_events(), lambda a: similar.get(a, []), lambda a, t: ["dreampop"])
+    assert pool[0]["key"] == ["new order", "blue monday"]
+
+
+def test_the_join_key_survives_a_remaster_suffix_on_either_side():
+    from mldj.match import track_key
+
+    similar = {"A": [("New Order", "Blue Monday - 2016 Remaster")], "B": []}
+    pool = candidate_pool(_events(), lambda a: similar.get(a, []), lambda a, t: ["dreampop"])
+    # The pool's suffixed title and a bare Spotify title must land on the same key, or the
+    # pitch's headline claim silently reads "the DJ's pick was not in the pool".
+    assert pool[0]["key"] == list(track_key("New Order", "Blue Monday"))

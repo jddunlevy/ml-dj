@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from mldj.match import track_key
 from mldj.skips import Play, load_plays
 from mldj.space.vocab import canonical_tag
 
@@ -52,6 +53,9 @@ def session_events(
                 "ts": play.started_at_ms,
                 "artist": play.artist,
                 "title": play.title,
+                # Pairs with the key on each candidate. Raw strings stay untouched for
+                # display; this is the only thing the two sources are ever joined on.
+                "key": list(track_key(play.artist, play.title)),
                 "tags": [t for t in tags if t],
                 "outcome": play.outcome,
                 "earliness": round(earliness_of(play), 4),

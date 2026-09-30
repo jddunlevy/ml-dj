@@ -56,3 +56,35 @@ test_that("epsilon of zero ignores novelty entirely", {
   r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands, epsilon = 0)
   expect_equal(r$score[1], r$score[2])
 })
+
+test_that("the actual pick matches on the normalized key, not on raw strings", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  # The pool's title came from Last.fm, the DJ's from Spotify. They name one track two ways.
+  # Joining on raw strings flags nothing and reads as "the DJ's pick was not in the pool" -
+  # the pitch's whole claim, lost silently. mldj candidates and mldj export-session both
+  # emit `key` from match.track_key so this join never depends on the strings agreeing.
+  cands <- list(
+    list(artist = "New Order", title = "Blue Monday - 2016 Remaster",
+         key = c("new order", "blue monday"), tags = "dreampop", novel = TRUE)
+  )
+  actual <- list(artist = "New Order", title = "Blue Monday",
+                 key = c("new order", "blue monday"))
+  r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands, actual = actual)
+  expect_equal(sum(r$is_actual), 1)
+  # Display still shows what Last.fm actually called it.
+  expect_equal(r$title[1], "Blue Monday - 2016 Remaster")
+})
+
+test_that("a keyed actual pick never matches a different track that shares no key", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  cands <- list(
+    list(artist = "New Order", title = "Blue Monday", key = c("new order", "blue monday"),
+         tags = "dreampop", novel = TRUE)
+  )
+  actual <- list(artist = "New Order", title = "Temptation",
+                 key = c("new order", "temptation"))
+  r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands, actual = actual)
+  expect_equal(sum(r$is_actual), 0)
+})
