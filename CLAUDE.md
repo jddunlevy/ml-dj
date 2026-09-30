@@ -178,8 +178,8 @@ Rscript -e "shiny::runApp('.')"
 - **History depth is settled, and counted:** 39,159 all-time scrobbles over **5,844 distinct
   tracks**, spanning 2021-09-05 to now (re-measured 2026-09-29). The corpus is deep rather than
   broad, about 6.7 plays per track. That retires spec open question 4 in full: Phase 1 measured the
-  tagging too — **98.2% of tracks carry a vector**, at tiers `{track: 1359, album: 810, artist:
-  3556, none: 106}`. Those are beat 6 numbers.
+  tagging too — **98.2% of tracks carry a vector**, at tiers `{track: 1360, album: 813, artist:
+  3563, none: 108}`. Those are beat 6 numbers.
 - **The scrobble hole affects novelty and nothing else — do not let it drive priorities.** A
   64-day hole, 2026-07-24 to 2026-09-26; scrobbling is reconnected and `mldj ingest` reports
   `gap_days = 0` (2026-09-29). It is bounded, so its cost is finite. It touches exactly one metric,
@@ -203,11 +203,13 @@ Rscript -e "shiny::runApp('.')"
 - **Synonyms co-occur LESS than related pairs in this corpus — the spec's premise is inverted.**
   Mean jaccard: synonym 0.103, related 0.259. Tagging is *choosing* a label, not enumerating
   equivalents, so nobody tags a track both `hip-hop` and `rap`. Level 1 therefore fails in all 72
-  sweep configurations (`related` 0.409 > `synonym` 0.183): a tuning problem was ruled out by
-  exhaustion, not by guess. Recorded baselines for Phase 2: **antonym 0.023, complementary −0.026.**
+  sweep configurations (`related` 0.396 > `synonym` 0.176): a tuning problem was ruled out by
+  exhaustion, not by guess. Recorded baselines for Phase 2: **antonym 0.030, complementary −0.020.**
+  These moved from 0.023 / −0.026 when the non-descriptive stoplist dropped 68 terms; the
+  conclusion did not move, and level 1 still fails.
   Do not re-run the sweep hoping for a different answer.
 - **`space.json` is gitignored and must stay that way until the leaks are removed.** The privacy
-  review flags 8 of 371 terms as matching a corpus artist name: 4 genuine (`radiohead`,
+  review flags 8 of 323 terms as matching a corpus artist name: 4 genuine (`radiohead`,
   `Kanye West`, `kendrick lamar`, `Timbaland`) and 4 false positives — `electronic`, `Love`, `fun`,
   `lush` are all real bands whose names are ordinary descriptive words. **Do not "fix" this by
   dropping all 8**; the four false positives are legitimate, load-bearing genre and mood terms.
