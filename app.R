@@ -4,16 +4,22 @@
 SESSION_PATH <- Sys.getenv("MLDJ_SESSION", "fixtures/session-synthetic.json")
 CANDS_PATH   <- Sys.getenv("MLDJ_CANDIDATES", "fixtures/candidates-synthetic.json")
 
+# Live mode re-reads the two JSON files as `mldj live` rewrites them. R still never polls
+# Spotify and still never decides an outcome - `skips.derive_plays` owns that, and a second
+# implementation in another language is a second thing to be wrong. Shiny only notices the
+# file changed. Off by default, so the demo path stays a deterministic replay from disk.
+LIVE <- nzchar(Sys.getenv("MLDJ_LIVE", ""))
+
 space <- load_space(Sys.getenv("MLDJ_SPACE", "space.json"))
 replay <- read_session(SESSION_PATH)
 candidates <- read_candidates(CANDS_PATH)
 layout_df <- space_layout(space)
 N_EVENTS <- length(replay$events)
 
-# Every prefix state, recomputed only when decay or w changes. The scrubber is then a lookup,
-# not a fold over the whole session on every frame.
-all_states <- function(decay, w) {
-  Reduce(function(s, e) session_step(s, e), replay$events,
+# Every prefix state, recomputed only when the events, decay or w change. The scrubber is
+# then a lookup, not a fold over the whole session on every frame.
+all_states <- function(events, decay, w) {
+  Reduce(function(s, e) session_step(s, e), events,
          session_new(space, decay = decay, w = w), accumulate = TRUE)[-1]
 }
 
@@ -33,6 +39,7 @@ ui <- shiny::fluidPage(
       shiny::numericInput("decay", "decay", 0.85, min = 0, max = 1, step = .05, width = "90px"),
       shiny::numericInput("w", "w", 1, min = 0, max = 5, step = .25, width = "70px"),
       shiny::numericInput("eps", "ε", 0, min = 0, max = 1, step = .05, width = "70px"),
+      if (LIVE) shiny::checkboxInput("follow", "follow", value = TRUE, width = "80px"),
       shiny::selectInput("theme", NULL, choices = names(THEMES), width = "150px")
     )
   ),
@@ -66,22 +73,65 @@ ui <- shiny::fluidPage(
 
 server <- function(input, output, session) {
   th <- shiny::reactive(THEMES[[input$theme %||% "notebook"]])
+
+  # `mldj live` rewrites these files in place, so a poll can land mid-write and read a
+  # truncated document. One bad read must not take down a running session: keep the last
+  # good value and try again on the next tick.
+  replay_rv <- shiny::reactiveVal(replay)
+  cands_rv <- shiny::reactiveVal(candidates)
+
+  if (LIVE) {
+    tolerant <- function(reader) function(path) tryCatch(reader(path), error = function(e) NULL)
+    raw_session <- shiny::reactiveFileReader(1500, session, SESSION_PATH,
+                                             tolerant(read_session))
+    raw_cands <- shiny::reactiveFileReader(1500, session, CANDS_PATH,
+                                           tolerant(read_candidates))
+    shiny::observe({
+      v <- raw_session()
+      if (!is.null(v) && length(v$events)) replay_rv(v)
+    })
+    shiny::observe({
+      v <- raw_cands()
+      if (!is.null(v) && length(v)) cands_rv(v)
+    })
+  }
+
+  n_events <- shiny::reactive(length(replay_rv()$events))
+
+  # The scrubber's range is data, not a constant, once the session can grow underneath it.
+  # `follow` is what makes live mode feel live: it pins the view to the newest event, and
+  # unticking it lets you scrub back through the session without the next poll yanking you
+  # forward again.
+  shiny::observeEvent(n_events(), {
+    n <- n_events()
+    current <- input$step %||% 1
+    shiny::updateSliderInput(
+      session, "step", max = max(n, 1),
+      value = if (LIVE && isTRUE(input$follow)) n else min(current, max(n, 1))
+    )
+  })
+
+  # Guards the window between the slider's max growing and the browser echoing the new
+  # value back: for one tick input$step can still exceed the event count.
+  step <- shiny::reactive(max(1, min(input$step %||% 1, n_events())))
   shiny::observeEvent(input$theme, {
     session$sendCustomMessage("theme", input$theme)
   })
 
-  states <- shiny::reactive(all_states(input$decay %||% 0.85, input$w %||% 1))
-  state <- shiny::reactive(states()[[input$step]])
-  event <- shiny::reactive(replay$events[[input$step]])
+  states <- shiny::reactive(all_states(replay_rv()$events, input$decay %||% 0.85,
+                                       input$w %||% 1))
+  state <- shiny::reactive(states()[[step()]])
+  event <- shiny::reactive(replay_rv()$events[[step()]])
   nxt <- shiny::reactive({
-    i <- input$step + 1
-    if (i > N_EVENTS) NULL else replay$events[[i]]
+    i <- step() + 1
+    if (i > n_events()) NULL else replay_rv()$events[[i]]
   })
 
-  # N_EVENTS, not length(states) - states is a reactive, so length() on it is always 1 and
-  # the header would read "3 / 1" for the whole demo.
+  # n_events(), not length(states) - states is a reactive, so length() on it is always 1
+  # and the header would read "3 / 1" for the whole demo.
   output$ident <- shiny::renderText(
-    paste(replay$session, "·", replay$label, "·", input$step, "/", N_EVENTS)
+    paste(replay_rv()$session, "·", replay_rv()$label, "·", step(), "/", n_events(),
+          if (LIVE) "· live" else "")
   )
 
   output$track <- shiny::renderUI({
@@ -112,14 +162,14 @@ server <- function(input, output, session) {
   # large monitor. Raising the device resolution scales every mark together.
   output$constellation <- shiny::renderPlot({
     plot_constellation(layout_df,
-                       trail_data(space, layout_df, states()[seq_len(input$step)]), th())
+                       trail_data(space, layout_df, states()[seq_len(step())]), th())
   }, res = 104)
 
   output$reading <- shiny::renderPlot(plot_reading(reading_data(space, state()$v), th()),
                                       res = 104)
 
   output$candidates <- shiny::renderUI({
-    r <- rank_candidates(space, state()$v, candidates, actual = nxt(),
+    r <- rank_candidates(space, state()$v, cands_rv(), actual = nxt(),
                          epsilon = input$eps %||% 0)
     top <- head(r, 5)
     cand_row <- function(rank, title, artist, score, hit) {
