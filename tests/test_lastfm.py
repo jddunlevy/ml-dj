@@ -155,3 +155,55 @@ def test_artist_and_track_caches_do_not_collide(tmp_path):
         client([]), "New Order", cache_dir=artists
     ) == [("new wave", 100), ("post-punk", 88), ("synthpop", 74), ("80s", 61), ("electronic", 45)]
     assert top_tags_cached(client([]), "New Order", "", cache_dir=tracks)[0] == ("new wave", 100)
+
+
+# A candidate pool is built from artist.getSimilar -> artist.getTopTracks, and Last.fm does
+# not always know the resulting (artist, track) pair by that spelling. Error 6 is what it
+# returns for "Track not found". It is an ordinary fact about an obscure track, not a
+# failure, and top_tags already promises "an untagged track returns []" - so it must return
+# that rather than take down a caller that is looping over hundreds of candidates.
+
+
+def _error_body(code: int, message: str) -> bytes:
+    return json.dumps({"error": code, "message": message}).encode()
+
+
+def test_lastfm_error_carries_the_api_error_code():
+    c = client([Response(200, _error_body(6, "Track not found"))])
+    with pytest.raises(LastfmError) as excinfo:
+        c.call("track.getTopTags", artist="Nobody", track="Nothing")
+    assert excinfo.value.code == 6
+
+
+def test_lastfm_error_code_is_none_for_a_transport_level_failure():
+    c = client([Response(404, b"")])
+    with pytest.raises(LastfmError) as excinfo:
+        c.call("track.getTopTags")
+    assert excinfo.value.code is None
+
+
+def test_top_tags_treats_an_unknown_track_as_untagged():
+    c = client([Response(200, _error_body(6, "Track not found"))])
+    assert top_tags(c, "Nobody", "Nothing At All") == []
+
+
+def test_top_tags_still_raises_on_an_error_that_is_not_a_missing_track():
+    # An invalid API key must stop the run loudly. Swallowing it would turn every track in
+    # the corpus into an untagged one and the space would quietly build from nothing.
+    c = client([Response(200, _error_body(10, "Invalid API key"))])
+    with pytest.raises(LastfmError):
+        top_tags(c, "Kate Bush", "Wuthering Heights")
+
+
+def test_artist_top_tags_treats_an_unknown_artist_as_untagged():
+    c = client([Response(200, _error_body(6, "Artist not found"))])
+    assert artist_top_tags(c, "Nobody At All") == []
+
+
+def test_top_tags_cached_caches_the_empty_result_for_an_unknown_track(tmp_path):
+    # Without this the pool re-asks Last.fm about the same missing track on every refresh,
+    # which in live mode is every few seconds.
+    c = client([Response(200, _error_body(6, "Track not found"))])
+    assert top_tags_cached(c, "Nobody", "Nothing", cache_dir=tmp_path) == []
+    assert top_tags_cached(c, "Nobody", "Nothing", cache_dir=tmp_path) == []
+    assert len(c.transport.requests) == 1

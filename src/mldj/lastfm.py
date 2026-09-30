@@ -21,7 +21,19 @@ TAG_INFO_DIR = Path("data/tag-info")  # gitignored
 
 
 class LastfmError(RuntimeError):
-    pass
+    """A Last.fm failure. `code` is the API's own error number, None for HTTP-level ones."""
+
+    def __init__(self, message: str, code: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+# Last.fm returns 6 for "Track not found" and "Artist not found" alike. A candidate pool is
+# built from artist.getSimilar -> artist.getTopTracks, and Last.fm does not always know the
+# resulting pair by that spelling, so this is an ordinary fact about an obscure track rather
+# than a failure. Every other code - a bad key, a disabled account - still raises: swallowing
+# those would turn the whole corpus untagged and the space would build from nothing.
+NOT_FOUND = 6
 
 
 @dataclass
@@ -67,7 +79,11 @@ class LastfmClient:
             if not isinstance(payload, dict):
                 raise LastfmError(f"{method}: unreadable body")
             if "error" in payload:
-                raise LastfmError(f"{method}: {payload.get('message', payload['error'])}")
+                code = payload["error"]
+                raise LastfmError(
+                    f"{method}: {payload.get('message', code)}",
+                    code=code if isinstance(code, int) else None,
+                )
             return payload
 
         raise LastfmError(f"{method}: exhausted attempts")
@@ -85,9 +101,23 @@ def _tag_rows(payload: dict) -> list:
     return tags if isinstance(tags, list) else [tags]
 
 
+def _tags_or_empty(call) -> dict | None:
+    """The payload, or None when Last.fm simply does not know the artist or track."""
+    try:
+        return call()
+    except LastfmError as err:
+        if err.code == NOT_FOUND:
+            return None
+        raise
+
+
 def top_tags(client: LastfmClient, artist: str, title: str) -> list[tuple[str, int]]:
     """Tag names with their counts, highest first. An untagged track returns []."""
-    payload = client.call("track.getTopTags", artist=artist, track=title, autocorrect="1")
+    payload = _tags_or_empty(
+        lambda: client.call("track.getTopTags", artist=artist, track=title, autocorrect="1")
+    )
+    if payload is None:
+        return []
     rows = [
         (str(row.get("name", "")), int(row.get("count") or 0))
         for row in _tag_rows(payload)
@@ -138,7 +168,11 @@ def artist_top_tags(client: LastfmClient, artist: str) -> list[tuple[str, int]]:
     tier that gives most of the corpus any tags at all. It is much coarser than track
     tags, which is why anything inheriting from here records its provenance.
     """
-    payload = client.call("artist.getTopTags", artist=artist, autocorrect="1")
+    payload = _tags_or_empty(
+        lambda: client.call("artist.getTopTags", artist=artist, autocorrect="1")
+    )
+    if payload is None:
+        return []
     rows = [
         (str(row.get("name", "")), int(row.get("count") or 0))
         for row in _tag_rows(payload)
