@@ -40,7 +40,10 @@ reading_data <- function(space, v, n_toward = 6, n_away = 3) {
   cos <- cosine_all(space, v)
   ordered <- sort(cos, decreasing = TRUE)
   toward <- head(ordered, n_toward)
-  away <- rev(tail(ordered, n_away))
+  # Disjoint by construction: away is drawn from what's left after toward is removed, so a term
+  # can never land in both groups even when n_toward + n_away >= length(ordered).
+  remainder <- ordered[!(names(ordered) %in% names(toward))]
+  away <- rev(tail(remainder, n_away))
 
   data.frame(
     tag  = c(unname(space$display[names(toward)]), unname(space$display[names(away)])),
@@ -54,7 +57,12 @@ reading_data <- function(space, v, n_toward = 6, n_away = 3) {
 #' available, and this survives greyscale, all five themes, and a projector.
 plot_reading <- function(reading_df, th = THEMES$notebook) {
   d <- reading_df
-  d$tag <- factor(d$tag, levels = d$tag[order(d$cos)])
+  # factor() rejects duplicate levels ("duplicated levels are not allowed"), so two term keys
+  # that share a display string would crash the plot. Order/position by a de-duplicated key, but
+  # keep the original text for display via scale_y_discrete's labels map.
+  key <- make.unique(as.character(d$tag))
+  y_labels <- stats::setNames(as.character(d$tag), key)
+  d$tag <- factor(key, levels = key[order(d$cos)])
   d$fill <- ifelse(d$sign == "toward", th$accent, th$muted)
   lim <- max(abs(d$cos), 0.1) * 1.35
 
@@ -67,6 +75,7 @@ plot_reading <- function(reading_df, th = THEMES$notebook) {
     ) +
     ggplot2::scale_fill_identity() +
     ggplot2::scale_x_continuous(limits = c(-lim, lim)) +
+    ggplot2::scale_y_discrete(labels = y_labels) +
     ggplot2::labs(title = "What the vector is pointing at",
                   subtitle = "cosine vs every tag · grey = pushed away by a skip") +
     base_theme(th) +
@@ -77,19 +86,43 @@ plot_reading <- function(reading_df, th = THEMES$notebook) {
 #' A fixed 2-D basis for the term cloud, computed once. Centre, then take the first two
 #' principal components. The basis is cached on the space object's meta so repeated calls in a
 #' reactive cannot produce a backdrop that drifts between frames.
-space_basis <- local({
+#'
+#' Cache validity is decided by identical() against the exact `terms` and `vectors` that produced
+#' the cached basis, not by a summary key. A key like "vocab size - rank" collides for any two
+#' spaces of the same shape (Shiny reloads space.json without restarting the process, so a stale
+#' basis served under a matching-shape key would be silently wrong). Digest is not installed, and
+#' a hand-rolled hash risks the same collision class it's meant to fix; identical() on the actual
+#' terms and vectors is slower but cannot be wrong, and this is called once per reactive tick, not
+#' per term.
+.space_basis_impl <- local({
   cache <- new.env(parent = emptyenv())
-  function(space) {
-    key <- paste0(length(space$terms), "-", ncol(space$vectors))
-    if (!is.null(cache[[key]])) return(cache[[key]])
-    mu <- colMeans(space$vectors)
-    centred <- sweep(space$vectors, 2, mu)
-    sv <- svd(centred, nu = 0, nv = 2)
-    basis <- list(mu = mu, P = sv$v, xy = centred %*% sv$v)
-    cache[[key]] <- basis
-    basis
-  }
+  list(
+    get = function(space) {
+      if (!is.null(cache$basis) &&
+          identical(cache$terms, space$terms) &&
+          identical(cache$vectors, space$vectors)) {
+        return(cache$basis)
+      }
+      mu <- colMeans(space$vectors)
+      centred <- sweep(space$vectors, 2, mu)
+      sv <- svd(centred, nu = 0, nv = 2)
+      basis <- list(mu = mu, P = sv$v, xy = centred %*% sv$v)
+      cache$basis <- basis
+      cache$terms <- space$terms
+      cache$vectors <- space$vectors
+      basis
+    },
+    #' Test-only: force the next space_basis() call to recompute the SVD from scratch, so a
+    #' stability test can genuinely exercise sign-flip risk instead of hitting the cache.
+    reset = function() {
+      cache$basis <- NULL
+      cache$terms <- NULL
+      cache$vectors <- NULL
+    }
+  )
 })
+space_basis <- .space_basis_impl$get
+space_basis_reset <- .space_basis_impl$reset
 
 #' Terms in 2-D, with a greedy de-collision pass choosing which get labels. Character cells and
 #' text labels both collide; picking labels by separation is cheaper and more predictable than
@@ -120,7 +153,7 @@ space_layout <- function(space, n_labels = 26, min_sep = 0.095) {
 #' Project each state's vector into the same basis as the terms.
 trail_data <- function(space, layout_df, states) {
   b <- space_basis(space)
-  pts <- t(vapply(states, function(s) as.vector(s$v %*% b$P), numeric(2)))
+  pts <- t(vapply(states, function(s) as.vector((s$v - b$mu) %*% b$P), numeric(2)))
   data.frame(
     step = seq_along(states),
     outcome = vapply(states, function(s) {
