@@ -78,18 +78,36 @@ over two unfinished items, both real, both explained in its plan:
   clears it but costs ~70 terms.
 
 **Phase 0 is still open and it is still the long pole — because it is what proves the thesis.**
-`data/sessions/` is empty: zero DJ sessions captured, so `reports/phase0-<date>.md` does not exist.
-The code has been done since `c02e33e`; what it needs is days of real listening, which no amount of
-Phase 2 or Phase 3 work substitutes for. **Run `mldj capture --label dj` whenever the DJ is on.**
-The prototype needs it too: its replay source has nothing to replay until a real session exists,
-and a synthetic fixture is a development stand-in, not something to demo.
+Three `--label dj` sessions are captured, **1.99 of the 2.00 target hours** but 3 of 5 sessions, and
+no contrast session under another label. `reports/phase0-2026-09-30.md` exists and is gitignored.
+**Run `mldj capture --label dj` whenever the DJ is on** — and see the power argument below: the
+reason to keep capturing has changed from filling an empty directory to buying statistical
+resolution. **Drop the poll interval first:** the report's verdict is `"too slow"` (shortest
+track-change gap 1129 ms at a declared 1000 ms interval), and every session captured at 1000 ms
+inherits that, unrepairably.
 
-The number that matters most from it is **`artist_delta` — post-skip versus post-completion
-persistence.** Near zero means the DJ does not respond to a skip, which is the exact deficit this
-app's session adaptation fixes, and it is the before-picture the redesign is measured against. It is
-also the one headline metric that owes nothing to the scrobble history. Phase 0's definition of done
-wants at least five `--label dj` sessions totalling two hours, plus one contrast session under
-another label. Plan: `docs/superpowers/plans/2026-09-28-phase-0-baseline.md`
+**`artist_delta` came back +0.0000 and it is a floored probe, not a result. Do not quote it as
+"the DJ does not respond to a skip".** Both arms are 0.0%, not one: across 42 adjacent pairs there
+are 0 artist repeats — the 6 same-artist adjacencies are all the same track resuming after a pause
+— and the skipped artist never returns within 5 tracks after a skip *or* a completion. The DJ
+enforces artist rotation unconditionally, so this metric's ceiling equals its floor and it cannot
+distinguish the two arms in principle. A measurement with no variance is absence of measurement,
+not evidence of absence.
+
+**The before-picture is the rotation rule itself, and it is the stronger claim.** 0 repeats in 42
+pairs, 0 returns within 5 tracks, *identical* after a skip and after a completion: a fixed variety
+rule whose output does not depend on which outcome preceded it is by construction not adapting. The
+absence of contrast is the evidence once it is framed as a rule rather than as a delta near zero.
+That needs no further capture.
+
+Two of the three Phase 0 metrics came back null. **Repetition is 0% at 1d/7d/14d**, so beat 1's
+"a track you skipped, played again" hook is unsupported — do not narrate it as observed. **Novelty
+is the only one with signal:** 24.4% per play, 26.3% per track. The **tag** arm of persistence is
+the only probe with room to move and it is starved — 2 of 8 post-skip and 0 of 12 post-completion
+transitions had tags on both sides, so its reported `tag_delta` is arithmetic over an empty set.
+Full numbers, the permutation test, and the proposed (not implemented) widening of the tag
+measurement are in the plan's **Findings — 2026-09-30** section.
+Plan: `docs/superpowers/plans/2026-09-28-phase-0-baseline.md`
 
 ## Architecture
 
@@ -189,9 +207,10 @@ Rscript -e "shiny::runApp('.')"
     the two dates named, and never quietly drop the window from the denominator. The error flatters
     the DJ, not this project's argument, which is the safe direction.
   - `measure/persistence.py` and `measure/repetition.py` never touch it. Persistence reads the
-    capture log plus Last.fm *tags*; repetition reads capture logs alone. **The adaptation claim —
-    `artist_delta`, the quantified "it isn't listening" — is therefore unaffected by the hole.** The
-    thesis metric is clean.
+    capture log plus Last.fm *tags*; repetition reads capture logs alone. **The adaptation claim is
+    therefore unaffected by the hole** — whatever else is wrong with it, the hole is not it. (That
+    claim now rests on the rotation rule rather than on `artist_delta`; see "Current phase". Both
+    read the capture log alone, so the conclusion here is unchanged.)
   - So: the hole is a footnote in the honesty section, not a project risk. Say it once, correctly,
     and move on. `IngestSummary.stale` (threshold 2 days) catches a *new* stoppage, which would be a
     real problem because it would corrupt the capture window itself — re-run `mldj ingest` before

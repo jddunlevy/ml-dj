@@ -21,7 +21,9 @@ would stand on.
 ## Why this slice, and why now
 
 The parent spec puts Phase 4 after the pitch, and that stays true: **this must not eat the
-deadline.** Phase 0 is at 1.34 of its 2 target hours and remains the long pole.
+deadline.** Phase 0 is at 1.99 of its 2 target hours but only 3 of 5 sessions, and it remains the
+long pole — more so since 2026-09-30, because the reason to keep capturing is now statistical power
+on the tag arm rather than an empty directory. See the plan's **Findings — 2026-09-30**.
 
 This earns its place early for one reason: it is the only tier that needs no new algorithm, no
 realtime path, and no Premium account. Everything it needs except a Spotify writer already exists
@@ -118,7 +120,8 @@ mldj playlist --session <path> [--name NAME] [--limit 30] [--per-artist 2]
   distinct artists in a top 20 because artist-tier tags are identical across an artist's tracks; a
   30-track playlist from six artists is the same bug wearing a different hat.
 - **Output** is a new private playlist named `ml-dj · <session id>` unless `--name` overrides.
-- **`--dry-run`** prints the tracklist and creates nothing.
+- **`--dry-run`** prints the tracklist and creates nothing. Off by default — see open question 2,
+  resolved.
 
 ### Never modify an existing playlist
 
@@ -197,5 +200,10 @@ the prototype, multi-user support, and the Spotify Extended Streaming History ex
    vector as it stood — would produce a playlist that narrates the session rather than summarising
    it, which is arguably more faithful to the thesis. It is also a different and larger design.
    Deferred deliberately, not overlooked.
-2. **Should `--dry-run` be the default?** Against: every other command in this repo does its job
-   when run. For: this one writes to a real account. Currently off; say so if that is wrong.
+2. ~~**Should `--dry-run` be the default?**~~ — **RESOLVED 2026-09-30: off by default.** Every
+   other command in this repo does its job when run, and the two guards that matter are already in
+   the design rather than in a flag: every run creates a *new* playlist and never edits an existing
+   one, and the token carries no `user-modify-playback-state`. So the worst case of a mistaken run
+   is a stray private playlist the user deletes — not lost data and not interrupted playback. A
+   default that makes the ordinary invocation a no-op trains people to append `--write` without
+   reading the output, which buys nothing.

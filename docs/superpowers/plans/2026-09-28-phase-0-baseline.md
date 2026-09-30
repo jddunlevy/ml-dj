@@ -3260,14 +3260,122 @@ Phase 0 is finished when all of the following are true:
 
 - [x] `pytest` passes with no network access and no test taking longer than a second
 - [x] `ruff check src tests` is clean
-- [ ] At least five `--label dj` sessions are captured, totalling two hours or more, plus at least one contrast session under another label
+- [ ] At least five `--label dj` sessions are captured, totalling two hours or more, plus at least one contrast session under another label — **3 of 5 sessions, 1.99 of 2.00 hours as of 2026-09-30.** The hours target is effectively met and the session count is not; no contrast session exists. See the findings above: more capture is now wanted for statistical power on the tag arm, not for the hours box.
 - [x] `data/scrobbles.jsonl` holds the full history (39,100 scrobbles), and the distinct-track count is written down: **5,831** — recorded in CLAUDE.md (spec open question 4, first half)
 - [ ] ~~Every pair in `fixtures/match-gold.json` passes~~ (26/26 do) — still to do: read a sample of `novel_examples` has been read by eye without recognising anything
-- [ ] `reports/phase0-<date>.md` exists and carries: novelty `play_rate` and `track_rate`, post-skip versus post-completion persistence with the delta, repetition at 1/7/14 days, and `unknown_plays` by reason
-- [ ] `interval_verdict` reads `"adequate"` — or the interval has been changed and sessions recaptured at the new value
+- [x] `reports/phase0-<date>.md` exists and carries: novelty `play_rate` and `track_rate`, post-skip versus post-completion persistence with the delta, repetition at 1/7/14 days, and `unknown_plays` by reason — `reports/phase0-2026-09-30.md`. It generates correctly; **two of its three metrics came back null and one of those nulls is a floored probe rather than a result** — read the findings section before quoting any number from it.
+- [ ] `interval_verdict` reads `"adequate"` — or the interval has been changed and sessions recaptured at the new value. **Measured 2026-09-30: `"too slow"`**, shortest track-change gap 1129 ms at a declared 1000 ms interval. The three sessions on disk cannot be repaired; the interval must drop before the next one.
 - [x] `git status --porcelain` shows nothing under `data/` or `reports/`, and no credential has ever been staged
 
-The report's numbers are then beat 3's evidence. Phase 1 starts from `docs/superpowers/specs/2026-09-28-ml-dj-design.md` and the distinct-track count this phase produced.
+The report's numbers are then beat 3's evidence — with the 2026-09-30 correction that beat 4's
+before-picture rests on the **rotation rule**, not on `artist_delta`, and that beat 1's repetition
+hook is unsupported by capture so far. Phase 1 starts from `docs/superpowers/specs/2026-09-28-ml-dj-design.md` and the distinct-track count this phase produced.
+
+---
+
+## Findings — 2026-09-30, first report
+
+`reports/phase0-2026-09-30.md` exists (gitignored). Three `--label dj` sessions, **1.99 hours**,
+45 plays, of which 15 (33.3%) are `unknown` — by reason `{playback stopped: 10, capture gap: 3,
+log ended without session_end: 2}`. Completions appeared for the first time, 16 against 14 skips,
+so persistence has both arms. **The answer it gives is not usable, and that is the finding.**
+
+### `artist_delta` is +0.0000 because the probe is floored — not because the DJ ignores skips
+
+Both arms are zero, not one:
+
+| | transitions | same artist |
+|---|---|---|
+| after a skip | 8 | 0.0% |
+| after a completion | 12 | 0.0% |
+
+The probe has no room to move at all. Of 42 adjacent pairs, 6 share an artist and **all 6 are the
+same track resuming after a pause** — verified by comparing titles, not just artists: identical
+artist *and* title on both sides, one of them the same track twice over. All 6 are correctly
+classified `unknown` and excluded. (Titles deliberately not reproduced here: this file is tracked
+and the repo is public, and captured session content does not leave `data/`.) Widening from
+adjacency to "does the artist return within the next k tracks" does not help:
+
+```
+k=1: skip 0/14   completion 0/16   delta +0.000
+k=2: skip 0/14   completion 0/15   delta +0.000
+k=3: skip 0/13   completion 0/14   delta +0.000
+k=5: skip 0/10   completion 0/11   delta +0.000
+```
+
+Zero variance on both arms at every lag. **The DJ enforces artist rotation unconditionally, so
+artist persistence cannot distinguish a skip from a completion in principle.** Task 10's stated
+inference — "if the two arms are the same, the system is not responding" — is invalid under this
+degeneracy: it assumes the metric *could* have come out differently. A measurement whose ceiling
+equals its floor is absence of measurement, not evidence of absence.
+
+This does not retire the metric. It stays in the report as the thing that establishes the floor,
+and it is the reason the argument moves to the rule below. **Never quote +0.0000 as "the DJ does
+not respond to a skip" without the 0/42 and the lag table beside it** — that is the same class of
+error as a gold-set score rising on a shrinking scorable subset.
+
+### The before-picture is the rotation rule itself
+
+The replacement is stronger than the original claim and needs no more data. 0 artist repeats in
+42 adjacent pairs, 0 returns within 5 tracks, and **identical behaviour after a skip and after a
+completion**. That is a fixed variety rule, and a rule whose output does not depend on which
+outcome preceded it is, by construction, not adapting. The absence of contrast *is* the evidence
+once it is framed as a rule rather than as a delta near zero.
+
+Stated for the deck: the DJ's only observable response to what you do is a rotation constraint it
+would have applied anyway. The redesign is measured against that — the session vector moves on a
+skip, so the next pick differs from what the same rotation rule would have produced.
+
+### Repetition came back 0% at every window — beat 1's hook has no support
+
+0 replays of skipped tracks at 1d, 7d and 14d, within or across sessions. The hook as written
+("a track you skipped on an earlier day, played again") is not present in 1.99 hours of capture.
+Either it needs far more capture to surface, or it is not a real behaviour of this system and the
+beat must be rewritten. **Do not narrate it as observed.** Novelty is the only metric of the three
+that came back with signal: 24.4% per play, 26.3% per track.
+
+### The tag arm is the one with room to move, and it is starved
+
+As `measure/persistence.py` computes it: **2 of 8** post-skip transitions had tags on both sides
+and **0 of 12** post-completion. One arm is empty, so the reported `tag_delta: -0.0556` is
+arithmetic over an empty set and must not be quoted.
+
+The starvation is deliberate and the reasoning is sound — `persistence.py:56` forbids artist-tier
+backoff because two tracks by one artist that both inherited artist tags have overlap 1.0 *by
+construction*, which measures the backoff rather than the DJ. **Do not "fix" that guard.** But the
+failure mode it prevents requires same-artist pairs, and this corpus has zero of them.
+
+Recomputed in scratch from the tiered tags the exports already carry, excluding same-artist pairs
+(none to exclude):
+
+```
+after a skip        n=13   mean jaccard 0.1607
+after a completion  n=15   mean jaccard 0.1362
+tag delta                        -0.0245     permutation p = 0.529 (20k shuffles)
+resolution floor at this n:      ±0.0766
+```
+
+n rises from 2 and 0 to 13 and 15. The delta is the wrong sign for adaptation and
+indistinguishable from noise, and — the part that matters — **this sample cannot resolve anything
+smaller than ±0.077**, which exceeds any plausible real effect. Detecting a 0.05 effect needs
+roughly 66 usable transitions against today's 28: about **three more hours of capture**.
+
+**Not implemented.** It departs from Task 10 in two ways, each needing argument before it enters
+`src/`:
+
+1. **Artist-tier tags are allowed.** Sound only while same-artist transitions stay at zero, which
+   is a property of this capture and not a guarantee. If it goes in, it must *assert* that count
+   is zero and fail loudly otherwise — never assume it.
+2. **Pairs whose right side is `unknown` are kept.** Defensible: what the DJ chose to play next
+   does not depend on that track's own outcome being classifiable. The left side must still be
+   classified. This is a real widening of Task 10's rule and changes `excluded_unknown`.
+
+### Poll interval measured: too slow
+
+Shortest observed gap between track changes was **1129 ms at a declared 1000 ms interval**, 5th
+percentile 2352 ms. Fast skips are still being collapsed, so the interval must come down before
+further capture — every session captured at 1000 ms inherits the limitation, and the sessions
+already on disk cannot be repaired.
 
 ---
 
