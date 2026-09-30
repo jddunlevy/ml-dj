@@ -93,3 +93,32 @@ rank_candidates <- function(space, v, candidates, actual = NULL, epsilon = 0) {
   rownames(d) <- NULL
   d[, c("rank", "artist", "title", "score", "novel", "is_actual")]
 }
+
+#' The rows to show, thinned to at most `per_artist` tracks per artist.
+#'
+#' Artist-tier tags are identical for every track by that artist, so every such track scores
+#' identically against the session vector and a stable sort keeps the block together. On a
+#' real pool that meant 1144 of 1406 candidates tied with at least one other - exactly the
+#' artist-tier count - and six distinct artists across the whole top 20. "What I'd play next"
+#' then reads as three Sky Ferreira tracks in a row, which is both a poor recommendation and
+#' a poor demo. The novelty term does not break it: five tracks by one artist are equally
+#' novel, so `epsilon` moves the whole block together.
+#'
+#' This thins the display and nothing else. `rank_candidates` must keep returning everything,
+#' because "the DJ played something this engine ranked 349th" is counted over the full pool -
+#' capping the pool itself would quietly change that number.
+#'
+#' Ranks are the true ones. Renumbering the shown rows 1..n would erase the gaps, and the
+#' gaps are the tie structure made visible rather than hidden.
+top_by_artist <- function(ranked, n = 5, per_artist = 1) {
+  if (nrow(ranked) == 0) {
+    return(ranked)
+  }
+  # Rows arrive in rank order, so the first time an artist is seen is that artist's best
+  # track and seq_along over the group gives each row its position within the artist.
+  within <- ave(seq_len(nrow(ranked)), ranked$artist, FUN = seq_along)
+  # The DJ's actual pick is exempt. It is the one row the pitch cannot afford to drop, and
+  # thinning it away would delete the claim rather than tidy the list.
+  keep <- within <= per_artist | ranked$is_actual
+  head(ranked[keep, , drop = FALSE], n)
+}

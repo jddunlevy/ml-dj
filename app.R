@@ -171,7 +171,7 @@ server <- function(input, output, session) {
   output$candidates <- shiny::renderUI({
     r <- rank_candidates(space, state()$v, cands_rv(), actual = nxt(),
                          epsilon = input$eps %||% 0)
-    top <- head(r, 5)
+    top <- top_by_artist(r, n = 5)
     cand_row <- function(rank, title, artist, score, hit) {
       shiny::div(class = paste("cand-row", if (hit) "hit" else ""),
                  shiny::span(rank),
@@ -183,8 +183,11 @@ server <- function(input, output, session) {
     })
     # The pitch's moment: the DJ's pick ranked outside what the engine would have shown.
     # It is always rendered, however deep it sits, with the elision made explicit.
+    #
+    # "not already shown" rather than "rank > 5": top_by_artist thins same-artist ties out of
+    # the display, so a pick can sit at rank 3 and still be absent from the rows above.
     hit <- r[r$is_actual, ]
-    if (nrow(hit) == 1 && hit$rank > 5) {
+    if (nrow(hit) == 1 && !(hit$rank %in% top$rank)) {
       rows <- c(rows, list(
         shiny::div(class = "gap", "· · ·"),
         cand_row(hit$rank, hit$title, hit$artist, hit$score, TRUE)))

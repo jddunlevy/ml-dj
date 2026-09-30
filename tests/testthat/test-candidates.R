@@ -130,3 +130,73 @@ test_that("an untaggable actual pick flags nothing rather than entering the rank
   expect_equal(nrow(r), 1)
   expect_equal(sum(r$is_actual), 0)
 })
+
+# Artist-tier tags are identical for every track by that artist, so every such track scores
+# identically and the sort keeps the block together. Measured on a real pool: 1144 of 1406
+# candidates shared a score with at least one other - exactly the artist-tier count - and the
+# top 20 held 6 distinct artists. The novelty term does not help, because five tracks by one
+# artist are equally novel and it shifts the whole block by the same amount.
+#
+# The fix belongs here rather than in rank_candidates. The ranking must stay complete: "the
+# DJ played something this engine ranked 349th" is counted over every candidate, and thinning
+# the pool would change that number. This only chooses what to show.
+
+.row <- function(rank, artist, title, score) {
+  data.frame(rank = rank, artist = artist, title = title, score = score,
+             novel = TRUE, is_actual = FALSE, stringsAsFactors = FALSE)
+}
+
+.ranked <- function() {
+  do.call(rbind, list(
+    .row(1, "Sky Ferreira", "You're Not the One", 0.7214),
+    .row(2, "Sky Ferreira", "I Blame Myself", 0.7214),
+    .row(3, "Sky Ferreira", "Boys", 0.7214),
+    .row(4, "Phantogram", "Black Out Days", 0.7195),
+    .row(5, "Bebe Rexha", "I Got You", 0.7182),
+    .row(6, "Bebe Rexha", "Meant to Be", 0.7182),
+    .row(7, "Chairlift", "Bruises", 0.7081),
+    .row(8, "Chairlift", "Sidewalk Safari", 0.7081),
+    .row(9, "Grimes", "Oblivion", 0.6902)))
+}
+
+test_that("the shown rows hold one track per artist", {
+  shown <- top_by_artist(.ranked(), n = 5)
+  expect_equal(shown$artist,
+               c("Sky Ferreira", "Phantogram", "Bebe Rexha", "Chairlift", "Grimes"))
+})
+
+test_that("the highest-scoring track is the one kept for each artist", {
+  shown <- top_by_artist(.ranked(), n = 5)
+  expect_equal(shown$title[1], "You're Not the One")
+  expect_equal(shown$title[3], "I Got You")
+})
+
+test_that("true ranks survive, so the elision is visible rather than hidden", {
+  # Renumbering 1..5 would erase the fact that ranks 2, 3, 6 and 8 were skipped, which is
+  # precisely the tie structure worth showing.
+  expect_equal(top_by_artist(.ranked(), n = 5)$rank, c(1, 4, 5, 7, 9))
+})
+
+test_that("fewer artists than slots returns what exists rather than padding", {
+  few <- .ranked()[1:3, ]
+  expect_equal(nrow(top_by_artist(few, n = 5)), 1)
+})
+
+test_that("an empty ranking yields an empty selection", {
+  expect_equal(nrow(top_by_artist(.ranked()[0, ], n = 5)), 0)
+})
+
+test_that("per_artist is tunable for a pool that does not need thinning", {
+  expect_equal(nrow(top_by_artist(.ranked(), n = 5, per_artist = 2)), 5)
+  expect_equal(top_by_artist(.ranked(), n = 5, per_artist = 2)$rank, c(1, 2, 4, 5, 6))
+})
+
+test_that("the DJ's actual pick is never dropped by the per-artist cap", {
+  # The pitch's moment must survive display thinning: if the pick is a second track by an
+  # artist already shown, hiding it would silently delete the claim.
+  r <- .ranked()
+  r$is_actual[3] <- TRUE
+  shown <- top_by_artist(r, n = 5)
+  expect_true(any(shown$is_actual))
+  expect_true("Boys" %in% shown$title)
+})
