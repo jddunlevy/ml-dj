@@ -1,0 +1,10 @@
+{
+ "session": "synthetic-20260924T101500Z",
+ "candidates": [
+  {"artist": "Artist J", "title": "Cand 1", "tags": ["dreampop", "shoegaze"], "novel": true},
+  {"artist": "Artist K", "title": "Cand 2", "tags": ["dreampop", "ethereal"], "novel": false},
+  {"artist": "Artist L", "title": "Cand 3", "tags": ["shoegaze", "noisepop"], "novel": true},
+  {"artist": "Artist M", "title": "Cand 4", "tags": ["indierock"], "novel": false},
+  {"artist": "Artist N", "title": "Cand 5", "tags": ["dance", "electropop"], "novel": true}
+ ]
+}
