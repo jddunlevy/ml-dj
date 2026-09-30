@@ -1,0 +1,33 @@
+:root, [data-theme="notebook"] {
+  --bg:#f5f1e8; --surface:#fff; --text:#1a1a1a; --muted:#666; --accent:#000;
+}
+[data-theme="avocado"]      { --bg:#d4e3c0; --surface:#e8efd9; --text:#2d3a1f;
+                              --muted:#5a6b46; --accent:#3d5a2a; }
+[data-theme="sakura"]       { --bg:#fce4ec; --surface:#fdeef3; --text:#3a1f2e;
+                              --muted:#7a4a60; --accent:#d9869f; }
+[data-theme="blood-orange"] { --bg:#ffb380; --surface:#ffd9b3; --text:#2a0f00;
+                              --muted:#8a3a1a; --accent:#c91540; }
+[data-theme="blue-bird"]    { --bg:#bcd4e6; --surface:#d4e2ee; --text:#3a2820;
+                              --muted:#7a5a48; --accent:#6e4030; }
+
+body { background:var(--bg); color:var(--text);
+       font-family:"JetBrains Mono", ui-monospace, monospace; font-size:13px; }
+.hd { display:flex; justify-content:space-between; align-items:center;
+      padding:8px 12px; background:var(--surface); border-bottom:1px solid var(--muted); }
+.logo { letter-spacing:.15em; text-transform:uppercase; font-size:12px; }
+.lab { font-size:9px; letter-spacing:.17em; text-transform:uppercase;
+       color:var(--muted); margin:0 0 8px; }
+.kv { display:flex; justify-content:space-between; font-size:10.5px;
+      padding:2.5px 0; border-bottom:1px dotted var(--muted); }
+.cand-row { display:grid; grid-template-columns:28px 1fr 40px; gap:6px;
+            padding:3px 4px; border-bottom:1px dotted var(--muted); font-size:10.5px; }
+
+/* The DJ's actual pick. Built from theme tokens rather than a fixed amber, because a
+   hardcoded highlight that reads well on the cream notebook ground disappears on
+   blood-orange. Three channels carry it - surface fill, accent rule, bold weight - so it
+   survives greyscale and a projector, the same redundancy rule the plots follow. */
+.cand-row.hit { background:var(--surface); box-shadow:inset 3px 0 0 var(--accent);
+                outline:1px solid var(--accent); font-weight:700; }
+.gap { text-align:center; color:var(--muted); font-size:9px; letter-spacing:.3em; }
+.trk { font-size:14px; margin:0; }
+.art { font-size:11px; color:var(--muted); margin:0 0 10px; }

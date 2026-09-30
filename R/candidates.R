@@ -43,6 +43,26 @@ matches_actual <- function(candidates, actual) {
 #' never-before-heard candidate is lifted. Novelty is an upper bound (the scrobble hole), so a
 #' large epsilon amplifies a number that is already generous. Default it low.
 rank_candidates <- function(space, v, candidates, actual = NULL, epsilon = 0) {
+  # candidate_pool drops every track played in the session, and the DJ's next pick is one of
+  # them - so the pick is absent from the pool by construction, in production as much as in
+  # the fixtures. Excluding played tracks is right for recommending and wrong for evaluating,
+  # and the pitch needs both: "what I'd play next" from the pool, "where the DJ's choice
+  # landed" from the pool PLUS that choice. So it is scored against the same session vector
+  # and spliced in. The rank it gets is its rank among everything considered, which is the
+  # only reading of "ranked 47th" that means anything.
+  #
+  # It needs tags to be scoreable. An untaggable pick is left out rather than entered at a
+  # score of zero, which would invent a rank for a track nothing is known about.
+  if (!is.null(actual) && length(as.character(unlist(actual$tags) %||% character(0))) > 0) {
+    if (!any(matches_actual(candidates, actual))) {
+      spliced <- list(artist = actual$artist, title = actual$title,
+                      key = as.character(unlist(actual$key) %||% character(0)),
+                      tags = as.character(unlist(actual$tags)),
+                      novel = isTRUE(actual$novel))
+      candidates <- c(candidates, list(spliced))
+    }
+  }
+
   if (length(candidates) == 0) {
     return(data.frame(rank = integer(0), artist = character(0), title = character(0),
                       score = numeric(0), novel = logical(0), is_actual = logical(0),

@@ -88,3 +88,45 @@ test_that("a keyed actual pick never matches a different track that shares no ke
   r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands, actual = actual)
   expect_equal(sum(r$is_actual), 0)
 })
+
+test_that("the actual pick is ranked even though the pool excludes it by construction", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  # candidate_pool drops every track played in the session, and the DJ's next pick is one of
+  # those. Without splicing it back in, "the DJ played the one this engine ranked 47th" is
+  # unsayable: the pick is never in the ranking to be found.
+  cands <- list(
+    list(artist = "Pool", title = "P", tags = "dreampop", novel = TRUE),
+    list(artist = "Pool2", title = "Q", tags = "shoegaze", novel = TRUE)
+  )
+  actual <- list(artist = "DJ", title = "Played", tags = c("hiphop", "rap"), novel = FALSE)
+  r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands, actual = actual)
+
+  expect_equal(nrow(r), 3)
+  expect_equal(sum(r$is_actual), 1)
+  # It is scored on its own tags, so a poor match lands low - which is the pitch's point.
+  expect_equal(r$artist[r$is_actual], "DJ")
+  expect_true(r$rank[r$is_actual] > 1)
+})
+
+test_that("an actual pick already in the pool is flagged once, never duplicated", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  cands <- list(
+    list(artist = "Pool", title = "P", key = c("pool", "p"), tags = "dreampop", novel = TRUE)
+  )
+  actual <- list(artist = "Pool", title = "P", key = c("pool", "p"), tags = "dreampop")
+  r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands, actual = actual)
+  expect_equal(nrow(r), 1)
+  expect_equal(sum(r$is_actual), 1)
+})
+
+test_that("an untaggable actual pick flags nothing rather than entering the ranking unscored", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  cands <- list(list(artist = "Pool", title = "P", tags = "dreampop", novel = TRUE))
+  r <- rank_candidates(sp, tag_vector(sp, "dreampop"), cands,
+                       actual = list(artist = "DJ", title = "Played"))
+  expect_equal(nrow(r), 1)
+  expect_equal(sum(r$is_actual), 0)
+})
