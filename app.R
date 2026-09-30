@@ -45,17 +45,17 @@ ui <- shiny::fluidPage(
       shiny::uiOutput("stats")
     ),
     shiny::column(6, shiny::p(class = "lab", "session vector"),
-                  shiny::plotOutput("constellation", height = "380px")),
+                  shiny::plotOutput("constellation", height = "100%")),
     shiny::column(
       4,
       shiny::p(class = "lab", "reading"),
-      shiny::plotOutput("reading", height = "260px"),
+      shiny::plotOutput("reading", height = "100%"),
       shiny::p(class = "lab", style = "margin-top:14px", "what i'd play next"),
       shiny::uiOutput("candidates")
     )
   ),
   shiny::div(
-    style = "padding:10px 14px;border-top:1px solid var(--muted);background:var(--surface)",
+    class = "scrub",
     shiny::sliderInput("step", NULL, min = 1, max = N_EVENTS, value = 1, step = 1,
                        width = "100%", animate = shiny::animationOptions(interval = 1400)),
     shiny::div(style = "font-size:9px;color:var(--muted);margin-top:4px",
@@ -107,12 +107,16 @@ server <- function(input, output, session) {
     )
   })
 
+  # res, not point sizes: the plot functions size type in points, so a panel that grows
+  # with the window leaves the labels the same pixel height and they read as tiny on a
+  # large monitor. Raising the device resolution scales every mark together.
   output$constellation <- shiny::renderPlot({
     plot_constellation(layout_df,
                        trail_data(space, layout_df, states()[seq_len(input$step)]), th())
-  })
+  }, res = 104)
 
-  output$reading <- shiny::renderPlot(plot_reading(reading_data(space, state()$v), th()))
+  output$reading <- shiny::renderPlot(plot_reading(reading_data(space, state()$v), th()),
+                                      res = 104)
 
   output$candidates <- shiny::renderUI({
     r <- rank_candidates(space, state()$v, candidates, actual = nxt(),

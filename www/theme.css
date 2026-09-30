@@ -31,3 +31,26 @@ body { background:var(--bg); color:var(--text);
 .gap { text-align:center; color:var(--muted); font-size:9px; letter-spacing:.3em; }
 .trk { font-size:14px; margin:0; }
 .art { font-size:11px; color:var(--muted); margin:0 0 10px; }
+
+/* Fill the viewport, whatever its size. The plots were pinned at 380px and 260px, which
+   left a tall monitor half empty and cropped the constellation on a laptop. Height now
+   comes from the window: header and scrubber take what they need, the middle row takes
+   the rest, and each plot fills its column. */
+html, body { height:100%; }
+body { margin:0; }
+
+.container-fluid { display:flex; flex-direction:column; height:100vh; padding:0; }
+.container-fluid > .hd, .container-fluid > .scrub { flex:0 0 auto; }
+.container-fluid > .row { flex:1 1 auto; min-height:0; margin:0; }
+.container-fluid > .row > [class*="col-"] {
+  display:flex; flex-direction:column; min-height:0; height:100%; padding:12px 14px;
+}
+
+/* min-height:0 on both is what lets a flex child shrink below its content size; without
+   it the plots overflow the row and push the scrubber off-screen. */
+.shiny-plot-output { flex:1 1 auto; min-height:0; }
+#reading { flex:0 0 42%; }
+#candidates { flex:1 1 auto; min-height:0; overflow-y:auto; }
+
+.scrub { padding:10px 14px; border-top:1px solid var(--muted); background:var(--surface); }
+.scrub .form-group { margin-bottom:0; }
