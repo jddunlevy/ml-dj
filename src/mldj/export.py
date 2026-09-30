@@ -36,17 +36,37 @@ def earliness_of(play: Play) -> float:
 
 
 def session_events(
-    plays: Iterable[Play], tags_for: TagsFor, was_heard: WasHeard | None = None
+    plays: Iterable[Play],
+    tags_for: TagsFor,
+    was_heard: WasHeard | None = None,
+    artist_tags_for: Callable[[str], list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """The prototype's event list, in chronological order.
 
     `novel` is an upper bound while the scrobble history has its 64-day hole: a track first
     heard inside it reads as never-heard. With no history supplied everything reads novel,
     which is the honest default for a caller that has not provided one.
+
+    Tags back off from the track tier to the artist tier, because track-tier coverage is
+    24.5% against the artist tier's ~95%. Consulting only the track tier leaves most real
+    tracks untagged, and an untagged track contributes a zero vector - the session vector
+    stops moving, which is the single thing this prototype exists to show. Measured on a
+    real capture before this existed: one of five tracks tagged.
+
+    `tier` records where each event's tags came from, and that is honest-reporting
+    machinery rather than bookkeeping. Artist-tier tags are identical for every track by
+    that artist, so a session vector built from them responds to the artist and not to the
+    track. space/assign.py keeps the same provenance for the same reason. Say it in beat 6.
     """
     events = []
     for play in plays:
         tags = [canonical_tag(t) for t in tags_for(play.artist, play.title)]
+        tags = [t for t in tags if t]
+        tier = "track" if tags else "none"
+        if not tags and artist_tags_for is not None:
+            tags = [canonical_tag(t) for t in artist_tags_for(play.artist)]
+            tags = [t for t in tags if t]
+            tier = "artist" if tags else "none"
         heard = was_heard(play.artist, play.title) if was_heard is not None else False
         events.append(
             {
@@ -56,7 +76,8 @@ def session_events(
                 # Pairs with the key on each candidate. Raw strings stay untouched for
                 # display; this is the only thing the two sources are ever joined on.
                 "key": list(track_key(play.artist, play.title)),
-                "tags": [t for t in tags if t],
+                "tags": tags,
+                "tier": tier,
                 "outcome": play.outcome,
                 "earliness": round(earliness_of(play), 4),
                 "novel": not heard,
@@ -76,7 +97,7 @@ def write_session(path: Path, session: str, label: str, events: list[dict[str, A
 def _run(args: argparse.Namespace) -> int:
     from mldj.clock import SystemClock
     from mldj.env import load_env, require
-    from mldj.lastfm import LastfmClient, top_tags_cached
+    from mldj.lastfm import LastfmClient, artist_top_tags_cached, top_tags_cached
     from mldj.transport import UrllibTransport
 
     paths = sorted(Path(args.sessions).glob("*.jsonl"))
@@ -89,6 +110,9 @@ def _run(args: argparse.Namespace) -> int:
     def tags_for(artist: str, title: str) -> list[str]:
         return [name for name, _count in top_tags_cached(client, artist, title)]
 
+    def artist_tags_for(artist: str) -> list[str]:
+        return [name for name, _count in artist_top_tags_cached(client, artist)]
+
     from mldj.match import track_key
     from mldj.measure.novelty import build_history
     from mldj.scrobbles import SCROBBLES_PATH, read_scrobbles
@@ -100,7 +124,7 @@ def _run(args: argparse.Namespace) -> int:
 
     for path in paths:
         plays = load_plays([path])
-        events = session_events(plays, tags_for, was_heard)
+        events = session_events(plays, tags_for, was_heard, artist_tags_for)
         out = Path(args.out) / f"{path.stem}.json"
         label = plays[0].label if plays else "unknown"
         write_session(out, path.stem, label, events)

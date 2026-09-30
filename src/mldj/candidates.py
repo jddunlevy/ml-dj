@@ -26,6 +26,7 @@ def candidate_pool(
     similar_for: SimilarFor,
     tags_for: TagsFor,
     was_heard: WasHeard | None = None,
+    artist_tags_for: Callable[[str], list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Tracks reachable from the session's artists, minus everything already played.
 
@@ -54,6 +55,14 @@ def candidate_pool(
             seen.add(key)
             tags = [canonical_tag(t) for t in tags_for(artist, title)]
             tags = [t for t in tags if t]
+            tier = "track"
+            if not tags and artist_tags_for is not None:
+                # Same 24.5%-vs-95% backoff the session events use. Without it the pool is
+                # mostly untagged, and an untagged candidate is dropped - so the pool would
+                # silently shrink to the quarter of tracks Last.fm happens to tag directly.
+                tags = [canonical_tag(t) for t in artist_tags_for(artist)]
+                tags = [t for t in tags if t]
+                tier = "artist"
             if not tags:
                 continue
             heard = was_heard(artist, title) if was_heard is not None else False
@@ -69,6 +78,7 @@ def candidate_pool(
                     # the pitch's headline claim quietly disappearing.
                     "key": list(track_key(artist, title)),
                     "tags": tags,
+                    "tier": tier,
                     "novel": not heard,
                 }
             )
@@ -85,7 +95,7 @@ def write_pool(path: Path, session: str, pool: list[dict[str, Any]]) -> None:
 def _run(args: argparse.Namespace) -> int:
     from mldj.clock import SystemClock
     from mldj.env import load_env, require
-    from mldj.lastfm import LastfmClient, top_tags_cached
+    from mldj.lastfm import LastfmClient, artist_top_tags_cached, top_tags_cached
     from mldj.match import track_key
     from mldj.measure.novelty import build_history
     from mldj.scrobbles import SCROBBLES_PATH, read_scrobbles
@@ -116,12 +126,16 @@ def _run(args: argparse.Namespace) -> int:
     def tags_for(artist: str, title: str) -> list[str]:
         return [name for name, _count in top_tags_cached(client, artist, title)]
 
+    def artist_tags_for(artist: str) -> list[str]:
+        return [name for name, _count in artist_top_tags_cached(client, artist)]
+
     history = build_history(read_scrobbles(SCROBBLES_PATH))
     pool = candidate_pool(
         payload["events"],
         similar_for,
         tags_for,
         lambda a, t: track_key(a, t) in history.keys,
+        artist_tags_for,
     )
     out = Path(args.out) / f"{payload['session']}.json"
     write_pool(out, payload["session"], pool)

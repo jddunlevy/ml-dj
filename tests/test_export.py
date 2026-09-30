@@ -63,3 +63,45 @@ def test_each_event_carries_the_normalized_join_key():
     assert events[0]["key"] == list(track_key("New Order", "Blue Monday"))
     # The raw strings are untouched - the key is for joining, the strings are for display.
     assert events[0]["title"] == "Blue Monday - 2016 Remaster"
+
+
+def test_tags_fall_back_to_the_artist_tier_and_record_where_they_came_from():
+    # Track-tier coverage is 24.5%; artist-tier is ~95%. Consulting only the track tier
+    # leaves most real tracks with no tags, and an untagged track contributes a zero vector -
+    # the session vector stops moving, which is the one thing the prototype exists to show.
+    play = Play(
+        track_id="t1", title="Untagged Song", artist="Some Band",
+        duration_ms=200_000, started_at_ms=1_000, ended_at_ms=2_000,
+        listened_ms=200_000, outcome="completed", session="dj-x", label="dj", reason="",
+    )
+    events = session_events(
+        [play], lambda a, t: [], artist_tags_for=lambda a: ["Shoegaze", "dream pop"]
+    )
+    assert events[0]["tags"] == ["shoegaze", "dreampop"]
+    assert events[0]["tier"] == "artist"
+
+
+def test_the_track_tier_wins_and_is_recorded_when_it_has_anything():
+    play = Play(
+        track_id="t1", title="Tagged Song", artist="Some Band",
+        duration_ms=200_000, started_at_ms=1_000, ended_at_ms=2_000,
+        listened_ms=200_000, outcome="completed", session="dj-x", label="dj", reason="",
+    )
+    events = session_events(
+        [play], lambda a, t: ["Dream Pop"], artist_tags_for=lambda a: ["shoegaze"]
+    )
+    assert events[0]["tags"] == ["dreampop"]
+    assert events[0]["tier"] == "track"
+
+
+def test_a_track_untagged_at_every_tier_is_recorded_as_none_not_silently_empty():
+    # The demo must be able to say "this track had no tags at all" rather than showing a
+    # vector that quietly did not move.
+    play = Play(
+        track_id="t1", title="Nothing Song", artist="Nobody",
+        duration_ms=200_000, started_at_ms=1_000, ended_at_ms=2_000,
+        listened_ms=200_000, outcome="completed", session="dj-x", label="dj", reason="",
+    )
+    events = session_events([play], lambda a, t: [], artist_tags_for=lambda a: [])
+    assert events[0]["tags"] == []
+    assert events[0]["tier"] == "none"
