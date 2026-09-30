@@ -2,38 +2,39 @@
   "source": "fixtures/session-synthetic.json",
   "decay": 0.85,
   "w": 1,
+  "space_terms": 319,
   "steps": [
     {
-      "terms": ["indierock", "alternative", "indie", "rock", "alternativerock"],
-      "cos": [0.778885, 0.778885, 0.74382, 0.492827, 0.433433]
+      "terms": ["alternative", "indierock", "indie", "rock", "alternativerock"],
+      "cos": [0.773508, 0.773508, 0.73016, 0.498884, 0.431117]
     },
     {
       "terms": ["indierock", "indie", "alternative", "dreampop", "rock"],
-      "cos": [0.845344, 0.718584, 0.527819, 0.48413, 0.406781]
+      "cos": [0.843368, 0.7027, 0.515462, 0.479688, 0.40378]
     },
     {
       "terms": ["indierock", "indie", "alternative", "dreampop", "rock"],
-      "cos": [0.634255, 0.479103, 0.36718, 0.360015, 0.280905]
+      "cos": [0.627921, 0.471602, 0.360079, 0.356793, 0.283792]
     },
     {
       "terms": ["dreampop", "indierock", "shoegaze", "indie", "alternative"],
-      "cos": [0.653996, 0.513655, 0.498299, 0.455165, 0.308482]
+      "cos": [0.650246, 0.507696, 0.495892, 0.447933, 0.303361]
     },
     {
       "terms": ["dreampop", "indierock", "shoegaze", "indie", "alternative"],
-      "cos": [0.549056, 0.434651, 0.422927, 0.379496, 0.259487]
+      "cos": [0.545931, 0.429698, 0.421515, 0.369831, 0.25197]
     },
     {
       "terms": ["dreampop", "shoegaze", "ethereal", "indierock", "indie"],
-      "cos": [0.72131, 0.456393, 0.42574, 0.351635, 0.335105]
+      "cos": [0.718926, 0.452761, 0.427561, 0.34666, 0.327056]
     },
     {
       "terms": ["dreampop", "shoegaze", "ethereal", "indierock", "indie"],
-      "cos": [0.72131, 0.456393, 0.42574, 0.351635, 0.335105]
+      "cos": [0.718926, 0.452761, 0.427561, 0.34666, 0.327056]
     },
     {
       "terms": ["dreampop", "shoegaze", "ethereal", "artpop", "indie"],
-      "cos": [0.819132, 0.413102, 0.362076, 0.307491, 0.302638]
+      "cos": [0.817385, 0.407531, 0.363122, 0.30699, 0.296412]
     }
   ]
 }

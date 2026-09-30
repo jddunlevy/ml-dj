@@ -1,6 +1,10 @@
 # Regenerates fixtures/engine-trace.json. Run this ONLY when the engine's behaviour is meant
-# to change, and say so in the commit message - a silent regeneration turns the parity test
-# into a test that the engine equals itself.
+# to change, or when space.json has been rebuilt, and say which in the commit message - a
+# silent regeneration turns the parity test into a test that the engine equals itself.
+#
+# The trace records cosines, so it depends on the space as much as on the algorithm: a
+# rebuilt vocabulary shifts every number slightly and the parity test fails while the engine
+# is untouched. The fingerprint below exists so that failure names the right culprit.
 for (f in list.files("R", pattern = "[.][Rr]$", full.names = TRUE)) source(f)
 
 DECAY <- 0.85
@@ -17,7 +21,9 @@ steps <- lapply(events, function(e) {
 })
 
 jsonlite::write_json(
-  list(source = "fixtures/session-synthetic.json", decay = DECAY, w = W, steps = steps),
+  list(source = "fixtures/session-synthetic.json", decay = DECAY, w = W,
+       space_terms = length(sp$terms),
+       steps = steps),
   "fixtures/engine-trace.json", auto_unbox = TRUE, digits = 8, pretty = TRUE
 )
 cat("wrote fixtures/engine-trace.json:", length(steps), "steps\n")
