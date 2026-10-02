@@ -45,13 +45,15 @@ def test_random_verifier_does_not_repeat():
     assert random_verifier() != random_verifier()
 
 
-def test_authorize_url_requests_only_the_read_scope_and_the_exact_redirect():
+def test_authorize_url_constructs_the_correct_parameters():
     url = authorize_url("client-abc", RFC_VERIFIER)
     assert url.startswith("https://accounts.spotify.com/authorize?")
     assert "code_challenge_method=S256" in url
     assert f"code_challenge={RFC_CHALLENGE}" in url
     assert "scope=user-read-currently-playing" in url
-    assert SCOPE == "user-read-currently-playing"
+    assert "playlist-modify-private" in url
+    assert "user-library-read" in url
+    assert "user-top-read" in url
     assert REDIRECT_URI == "http://127.0.0.1:8888/callback"
     assert "redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback" in url
 
@@ -162,3 +164,19 @@ def test_wait_for_code_captures_the_code_from_a_real_loopback_request():
         assert r.status == 200
     thread.join(timeout=5)
     assert captured == ["xyz789"]
+
+
+def test_the_token_carries_exactly_the_scopes_the_project_needs():
+    assert set(SCOPE.split()) == {
+        "user-read-currently-playing",
+        "playlist-modify-private",
+        "user-library-read",
+        "user-top-read",
+    }
+
+
+def test_the_token_never_carries_playback_control():
+    # Nothing in this project touches playback. The narrower the token, the smaller the blast
+    # radius of a bug in a tool that is one typo from writing to a real account. Queue writing
+    # is Phase 4 and stays out until the pitch is delivered.
+    assert "user-modify-playback-state" not in SCOPE
