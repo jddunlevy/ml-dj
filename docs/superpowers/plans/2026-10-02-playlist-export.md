@@ -1973,8 +1973,13 @@ def _run(args) -> int:
             "(cached; --refresh-library to refetch)"
         )
 
-    track_tags, artist_tags = cached_tag_index(tracks)
-    history = build_history(read_scrobbles(SCROBBLES_PATH))
+    # The corpus is passed in so the track-tier index is keyed by track_key rather than by
+    # the library's own Spotify strings - without it, a remaster suffix misses a cache entry
+    # that is sitting on disk and the row falls back to the artist tier, where every track by
+    # that artist scores identically. See the scope addition under Task 5.
+    scrobbles = list(read_scrobbles(SCROBBLES_PATH))
+    track_tags, artist_tags = cached_tag_index(tracks, scrobbles=scrobbles)
+    history = build_history(scrobbles)
     scorable, coverage = tag_library(
         tracks, track_tags, artist_tags, lambda a, t: history.contains(a, t)
     )
