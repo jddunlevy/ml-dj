@@ -954,6 +954,20 @@ visible rather than inferred from a disappointing playlist.
 come from Spotify. So the lookup goes through `match.track_key` — the same normalization the rest
 of the project joins on.
 
+**SCOPE ADDITION, approved 2026-10-02 after Task 5 landed: the track-tier index is built from
+the scrobble corpus, not from the library rows' own raw strings.** The cache is keyed by a SHA1
+of the raw Last.fm strings it was fetched with, so reading it with a library row's *Spotify*
+title only hits when the two strings coincide - `"Blue Monday - 2016 Remaster"` misses the entry
+filed under `"Blue Monday"` and falls back to the artist tier. That matters because artist-tier
+tags are identical across an artist's tracks, so an artist-tier fallback makes the ranking
+respond to the artist rather than the track; the track tier is the only tier with per-track
+discrimination. Measured on this corpus: 1375 of 5844 distinct tracks have cached track-tier
+tags, and 1688 of 1745 artists have artist tags. So `cached_tag_index` walks
+`index_corpus(read_scrobbles(...))`, which carries `track_key -> (raw artist, raw title)`,
+probes the cache with those raw names, and keys the result by `track_key` - the same thing
+`tags.coverage_only` already does. Library-row raw-name hits are kept as well, so nothing
+regresses.
+
 **Decision, stated rather than assumed:** the default run reads the cache only and makes no
 network call. A library track with no cached track-tier tags falls back to the artist tier, and
 with neither it is **excluded and counted**, never entered at a zero vector. Pulling missing tags
