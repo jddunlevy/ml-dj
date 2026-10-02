@@ -1,8 +1,25 @@
-import numpy as np
+import json
 
+import numpy as np
+import pytest
+
+from fakes import FakeTransport
 from mldj.library import ScorableTrack
-from mldj.playlist import Ranked, exclude_played, rank_library, thin_by_artist
+from mldj.playlist import (
+    ADD_CHUNK,
+    PlaylistError,
+    Ranked,
+    add_tracks,
+    create_playlist,
+    current_user_id,
+    exclude_played,
+    playlist_description,
+    publish_playlist,
+    rank_library,
+    thin_by_artist,
+)
 from mldj.space.space import TagSpace
+from mldj.transport import Response
 
 
 def a_space() -> TagSpace:
@@ -111,3 +128,96 @@ def test_thinning_stops_at_the_limit():
     # isolates the limit from the per-artist cap, rather than letting the two coincide and
     # leaving it ambiguous which one did the work.
     assert [r.rank for r in thinned] == [1, 2, 3]
+
+
+def ok(payload: dict) -> Response:
+    return Response(200, json.dumps(payload).encode())
+
+
+def test_create_playlist_posts_a_private_playlist_and_returns_its_id():
+    transport = FakeTransport([ok({"id": "pl1"})])
+    pid = create_playlist(transport, lambda: "tok", "me", "ml-dj - s1", "provenance")
+    assert pid == "pl1"
+    method, url, payload = transport.requests[0]
+    assert (method, url) == ("POST_JSON", "https://api.spotify.com/v1/users/me/playlists")
+    assert payload == {"name": "ml-dj - s1", "public": False, "description": "provenance"}
+
+
+def test_add_tracks_chunks_at_the_api_limit():
+    uris = [f"spotify:track:{i}" for i in range(ADD_CHUNK + 5)]
+    transport = FakeTransport([ok({"snapshot_id": "a"}), ok({"snapshot_id": "b"})])
+    assert add_tracks(transport, lambda: "tok", "pl1", uris) == ADD_CHUNK + 5
+    assert len(transport.requests) == 2
+    assert len(transport.requests[0][2]["uris"]) == ADD_CHUNK
+    assert len(transport.requests[1][2]["uris"]) == 5
+
+
+def test_add_tracks_makes_no_request_for_an_empty_list():
+    transport = FakeTransport([])
+    assert add_tracks(transport, lambda: "tok", "pl1", []) == 0
+    assert transport.requests == []
+
+
+def test_a_401_refreshes_once_and_retries():
+    transport = FakeTransport([Response(401, b""), ok({"id": "pl1"})])
+    refreshed = []
+    pid = create_playlist(
+        transport, lambda: "tok", "me", "n", "d",
+        on_unauthorized=lambda: refreshed.append(True),
+    )
+    assert pid == "pl1"
+    assert refreshed == [True]
+
+
+def test_a_second_401_raises_rather_than_looping():
+    transport = FakeTransport([Response(401, b""), Response(401, b"")])
+    with pytest.raises(PlaylistError, match="401"):
+        create_playlist(
+            transport, lambda: "tok", "me", "n", "d", on_unauthorized=lambda: None
+        )
+
+
+def test_a_403_names_the_scope_because_forbidden_alone_sends_you_to_the_wrong_place():
+    transport = FakeTransport([Response(403, b'{"error":{"message":"Forbidden"}}')])
+    with pytest.raises(PlaylistError, match="playlist-modify-private"):
+        create_playlist(transport, lambda: "tok", "me", "n", "d")
+
+
+def test_current_user_id_reads_the_profile():
+    transport = FakeTransport([ok({"id": "me"})])
+    assert current_user_id(transport, lambda: "tok") == "me"
+    assert transport.requests[0][1] == "https://api.spotify.com/v1/me"
+
+
+def test_a_dry_run_makes_no_request_at_all_and_returns_no_playlist_id():
+    # The guard the spec leans on when it makes --dry-run opt-in: the worst case of a mistaken
+    # real run is a stray private playlist, and the worst case of a dry run is nothing.
+    transport = FakeTransport([])
+    result = publish_playlist(
+        transport, lambda: "tok",
+        name="n", description="d", uris=["spotify:track:1"], dry_run=True,
+    )
+    assert result is None
+    assert transport.requests == []
+
+
+def test_publishing_for_real_reads_the_profile_creates_the_playlist_and_adds_the_tracks():
+    transport = FakeTransport([ok({"id": "me"}), ok({"id": "pl1"}), ok({"snapshot_id": "s"})])
+    result = publish_playlist(
+        transport, lambda: "tok",
+        name="n", description="d", uris=["spotify:track:1"], dry_run=False,
+    )
+    assert result == "pl1"
+    assert [r[0] for r in transport.requests] == ["GET", "POST_JSON", "POST_JSON"]
+
+
+def test_the_description_records_what_produced_the_playlist():
+    # A playlist that cannot say which space produced it is not reproducible, and the space is
+    # rebuilt often enough for that to matter: the 2026-09-30 stoplist moved the vocabulary
+    # from 371 terms to 323 and shifted every cosine.
+    text = playlist_description(
+        "dj-20260930T142116Z", 1504, 0.85, 1.0, 0.0,
+        {"vocabulary_size": 323, "built_utc": "2026-09-30T10:19:00+00:00"},
+    )
+    for fragment in ("dj-20260930T142116Z", "1504", "0.85", "323", "2026-09-30"):
+        assert fragment in text
