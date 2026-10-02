@@ -81,6 +81,15 @@ class FakeTransport:
         self.requests.append(("POST", url, data))
         return self._next()
 
+    def post_json(
+        self,
+        url: str,
+        payload: Mapping[str, object],
+        headers: Mapping[str, str] | None = None,
+    ) -> Response:
+        self.requests.append(("POST_JSON", url, payload))
+        return self._next()
+
     def _next(self) -> Response:
         if not self.responses:
             raise AssertionError("FakeTransport ran out of scripted responses")

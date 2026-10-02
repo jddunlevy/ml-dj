@@ -269,3 +269,74 @@ def test_the_space_records_how_many_terms_were_dropped_as_nondescriptive():
 
     assert space.meta["vocabulary_dropped"]["nondescriptive"] == 2  # 2013 and best
     assert "2013" not in space.terms and "best" not in space.terms
+
+
+# --- exclusion at load (privacy gate) -----------------------------------------------
+
+
+FULL_META = {
+    "rank": 2,
+    "eigenvalue_weighting": 0.0,
+    "shift": 1.0,
+    "context_smoothing": 1.0,
+    "min_count": 2,
+    "min_artists": 2,
+    "include_artists": False,
+    "seed": 0,
+    "vocabulary_size": 3,
+    "item_counts": {},
+    "tier_counts": {},
+}
+
+
+def _saved(tmp_path):
+    space = TagSpace(
+        terms=("indie", "radiohead", "shoegaze"),
+        vectors=np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]),
+        meta=FULL_META,
+        display={"radiohead": "radiohead"},
+    )
+    path = tmp_path / "space.json"
+    save_space(space, path)
+    return path
+
+
+def test_load_space_drops_excluded_terms_and_keeps_the_vectors_aligned(tmp_path):
+    space = load_space(_saved(tmp_path), exclude=("radiohead",))
+    assert space.terms == ("indie", "shoegaze")
+    # The surviving rows must be the surviving terms' rows, not simply the first two rows.
+    assert space.vector("shoegaze").tolist() == [1.0, 1.0]
+
+
+def test_load_space_excludes_nothing_by_default(tmp_path):
+    # The recorded Phase 2 baselines (antonym 0.030, complementary -0.020) were measured over
+    # the full vocabulary. A default exclusion would move them with no commit touching them.
+    assert load_space(_saved(tmp_path)).terms == ("indie", "radiohead", "shoegaze")
+
+
+def test_load_space_filters_display_to_surviving_terms(tmp_path):
+    # The display dict must be rebuilt scoped to surviving terms, not passed through
+    # unfiltered. A term like "radiohead" is excluded to block it from reaching a display
+    # surface; if it survives in display, the exclusion is incomplete - and the privacy gate
+    # fails. R/space.R rebuilds display scoped to terms; Python must match.
+    space = load_space(_saved(tmp_path), exclude=("radiohead",))
+    # Excluded term must not appear in display
+    assert "radiohead" not in space.display
+    # Surviving terms' display entries must be present
+    assert "indie" in space.display
+    assert "shoegaze" in space.display
+
+
+def test_load_space_preserves_full_display_when_nothing_is_excluded(tmp_path):
+    # Default behaviour is unchanged: with no exclude argument, display comes back exactly
+    # as it is in the file. Published baselines depend on this.
+    loaded = load_space(_saved(tmp_path))
+    # display must equal the raw display exactly - no identity defaults added for missing
+    # terms. The _saved() fixture intentionally has sparse display {"radiohead": "radiohead"}
+    assert loaded.display == {"radiohead": "radiohead"}
+
+
+def test_the_excluded_terms_are_the_four_the_privacy_review_confirmed():
+    # R/space.R holds the same list. Two implementations of one exclusion must not drift.
+    from mldj.space.space import EXCLUDED_TERMS
+    assert EXCLUDED_TERMS == ("radiohead", "kanyewest", "kendricklamar", "timbaland")

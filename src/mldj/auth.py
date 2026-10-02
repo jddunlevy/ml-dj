@@ -4,8 +4,11 @@ Two things change in the port: localStorage becomes a gitignored JSON file under
 and the browser redirect becomes a one-shot loopback HTTP server on the exact redirect
 URI Spotify has registered.
 
-Phase 0 only reads what is playing, so SCOPE is the single read scope. Do not widen it;
-user-modify-playback-state belongs to Phase 4.
+Phase 0 reads what is playing. `mldj playlist` adds three scopes - the two library reads and
+playlist-modify-private - and that is the whole widening. Do not add
+user-modify-playback-state: queue writing is Phase 4, after the pitch. Widening SCOPE
+invalidates the cached token and forces the PKCE flow again, so change it between capture
+sessions, never during one.
 """
 
 import base64
@@ -26,7 +29,18 @@ from mldj.transport import Transport
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 REDIRECT_URI = "http://127.0.0.1:8888/callback"
-SCOPE = "user-read-currently-playing"
+# Capture reads what is playing; `mldj playlist` reads the library and creates one playlist.
+# user-modify-playback-state is deliberately absent: nothing here touches playback, and the
+# narrower the token the smaller the blast radius of a bug in a tool that is one typo from
+# writing to a real account. Queue writing is Phase 4, after the pitch.
+SCOPE = " ".join(
+    (
+        "user-read-currently-playing",  # capture
+        "playlist-modify-private",  # playlist creation
+        "user-library-read",  # /v1/me/tracks
+        "user-top-read",  # /v1/me/top/tracks
+    )
+)
 VERIFIER_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 REFRESH_MARGIN_MS = 60_000
 TOKENS_PATH = Path("data/.spotify-tokens.json")  # data/ is gitignored; this repo is public
