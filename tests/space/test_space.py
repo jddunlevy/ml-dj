@@ -331,9 +331,9 @@ def test_load_space_preserves_full_display_when_nothing_is_excluded(tmp_path):
     # Default behaviour is unchanged: with no exclude argument, display comes back exactly
     # as it is in the file. Published baselines depend on this.
     loaded = load_space(_saved(tmp_path))
-    # Should have the radiohead entry since nothing is excluded
-    assert "radiohead" in loaded.display
-    assert loaded.display["radiohead"] == "radiohead"
+    # display must equal the raw display exactly - no identity defaults added for missing
+    # terms. The _saved() fixture intentionally has sparse display {"radiohead": "radiohead"}
+    assert loaded.display == {"radiohead": "radiohead"}
 
 
 def test_the_excluded_terms_are_the_four_the_privacy_review_confirmed():

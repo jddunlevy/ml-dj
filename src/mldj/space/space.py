@@ -200,13 +200,14 @@ def load_space(path: Path = DEFAULT_SPACE_PATH, exclude: Collection[str] = ()) -
     vectors = np.array(raw["vectors"], dtype=np.float64)
     raw_display = raw.get("display", {})
     banned = {canonical_tag(term) for term in exclude}
+    display = raw_display
     if banned:
         keep = [i for i, term in enumerate(terms) if canonical_tag(term) not in banned]
         terms = [terms[i] for i in keep]
         vectors = vectors[keep] if keep else vectors[:0]
-    # Filter display to surviving terms only. R/space.R rebuilds display scoped to the
-    # surviving terms; two implementations of one exclusion must not drift.
-    display = {term: raw_display.get(term, term) for term in terms}
+        # Filter display to surviving terms only. R/space.R rebuilds display scoped to the
+        # surviving terms; two implementations of one exclusion must not drift.
+        display = {term: raw_display.get(term, term) for term in terms}
     return TagSpace(
         terms=tuple(terms),
         vectors=vectors,
