@@ -6,11 +6,15 @@ from fakes import FakeTransport
 from mldj.library import (
     SAVED_URL,
     TOP_URL,
+    LibraryCoverage,
     LibraryTrack,
     fetch_library,
     read_library,
+    render_coverage,
+    tag_library,
     write_library,
 )
+from mldj.match import track_key
 from mldj.transport import Response
 
 
@@ -126,3 +130,62 @@ def test_the_library_round_trips_through_its_cache_file(tmp_path):
     path = tmp_path / "library.json"
     write_library(path, tracks)
     assert read_library(path) == tracks
+
+
+def test_tag_library_finds_tags_through_the_normalized_key_not_the_raw_string():
+    # The cache was filled from Last.fm's strings; the library carries Spotify's. "Blue Monday
+    # - 2016 Remaster" and "Blue Monday" are one track, and only track_key knows that. A raw
+    # string lookup here would report a well-tagged library as untagged.
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Blue Monday - 2016 Remaster")]
+    scorable, coverage = tag_library(
+        tracks, {track_key("New Order", "Blue Monday"): ["newwave"]}, {}
+    )
+    assert [t.tags for t in scorable] == [("newwave",)]
+    assert coverage.track_tier == 1
+
+
+def test_tag_library_backs_off_to_the_artist_tier_and_records_the_tier():
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Temptation")]
+    scorable, coverage = tag_library(tracks, {}, {"new order": ["newwave"]})
+    assert scorable[0].tier == "artist"
+    assert coverage.artist_tier == 1
+
+
+def test_an_untaggable_track_is_excluded_and_counted_rather_than_scored_at_zero():
+    # A zero vector entered at rank 0 invents a rank for a track nothing is known about, and
+    # inflates the denominator of "ranked Nth of M".
+    tracks = [LibraryTrack("spotify:track:1", "Nobody", "Untagged")]
+    scorable, coverage = tag_library(tracks, {}, {})
+    assert scorable == []
+    assert coverage.untagged == 1
+
+
+def test_tag_library_canonicalizes_tags_so_they_match_the_space_terms():
+    tracks = [LibraryTrack("spotify:track:1", "X", "A")]
+    tagged = {track_key("X", "A"): ["New Wave", "", "Post-Punk"]}
+    scorable, _ = tag_library(tracks, tagged, {})
+    assert scorable[0].tags == ("newwave", "postpunk")
+
+
+def test_novelty_comes_from_the_supplied_history_and_defaults_to_not_novel():
+    tracks = [LibraryTrack("spotify:track:1", "X", "A")]
+    tagged = {track_key("X", "A"): ["rock"]}
+    heard, _ = tag_library(tracks, tagged, {}, was_heard=lambda a, t: True)
+    unheard, _ = tag_library(tracks, tagged, {}, was_heard=lambda a, t: False)
+    default, _ = tag_library(tracks, tagged, {})
+    assert (heard[0].novel, unheard[0].novel, default[0].novel) == (False, True, False)
+
+
+def test_coverage_reports_the_scorable_share_of_the_library():
+    coverage = LibraryCoverage(tracks=4, track_tier=1, artist_tier=2, untagged=1)
+    assert coverage.scorable == 3
+    assert coverage.coverage == 0.75
+
+
+def test_coverage_of_an_empty_library_is_zero_rather_than_a_division_error():
+    assert LibraryCoverage(0, 0, 0, 0).coverage == 0.0
+
+
+def test_render_coverage_names_every_tier_so_a_thin_pool_is_attributable():
+    text = render_coverage(LibraryCoverage(tracks=4, track_tier=1, artist_tier=2, untagged=1))
+    assert "4" in text and "track 1" in text and "artist 2" in text and "75.0%" in text

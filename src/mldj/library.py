@@ -14,10 +14,13 @@ to.
 """
 
 import json
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from mldj.lastfm import ARTIST_TAGS_DIR, TAGS_DIR, _cache_path, _read_cached
+from mldj.match import normalize_artist, track_key
+from mldj.space.vocab import canonical_tag
 from mldj.transport import Transport
 
 SAVED_URL = "https://api.spotify.com/v1/me/tracks?limit=50"
@@ -98,3 +101,121 @@ def write_library(path: Path, tracks: Sequence[LibraryTrack]) -> None:
 def read_library(path: Path) -> list[LibraryTrack]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     return [LibraryTrack(**row) for row in raw["tracks"]]
+
+
+@dataclass(frozen=True)
+class ScorableTrack:
+    uri: str
+    artist: str
+    title: str
+    tags: tuple[str, ...]
+    tier: str
+    novel: bool
+
+
+@dataclass(frozen=True)
+class LibraryCoverage:
+    """How much of the library can be scored at all, by tier.
+
+    Corpus coverage is 98.2%, but the library is a different set and that figure does not
+    transfer. A low number here means the pool is thin and the ranking uninformative, which
+    has to be visible before the playlist is written rather than inferred afterwards from a
+    disappointing result.
+    """
+
+    tracks: int
+    track_tier: int
+    artist_tier: int
+    untagged: int
+
+    @property
+    def scorable(self) -> int:
+        return self.track_tier + self.artist_tier
+
+    @property
+    def coverage(self) -> float:
+        return self.scorable / self.tracks if self.tracks else 0.0
+
+
+def _canonical(tags: Sequence[str]) -> tuple[str, ...]:
+    return tuple(t for t in (canonical_tag(tag) for tag in tags) if t)
+
+
+def tag_library(
+    tracks: Sequence[LibraryTrack],
+    track_tags: Mapping[tuple[str, str], Sequence[str]],
+    artist_tags: Mapping[str, Sequence[str]],
+    was_heard: Callable[[str, str], bool] | None = None,
+) -> tuple[list[ScorableTrack], LibraryCoverage]:
+    """Attach tags to library rows, dropping what cannot be scored.
+
+    Lookups go through match.track_key and normalize_artist, never raw strings: the tag cache
+    was filled from Last.fm's names and these rows carry Spotify's. A raw lookup would miss
+    every remaster suffix and report a well-tagged library as untagged.
+
+    The artist-tier backoff is the same 24.5%-vs-95% trade export.session_events makes. It
+    costs precision - artist-tier tags are identical for every track by that artist, so those
+    tracks all score alike - and `tier` records it so the thinning and beat 6 can both say so.
+    """
+    scorable: list[ScorableTrack] = []
+    track_tier = artist_tier = untagged = 0
+
+    for track in tracks:
+        tags = _canonical(track_tags.get(track_key(track.artist, track.title), ()))
+        tier = "track"
+        if not tags:
+            tags = _canonical(artist_tags.get(normalize_artist(track.artist), ()))
+            tier = "artist"
+        if not tags:
+            untagged += 1
+            continue
+        if tier == "track":
+            track_tier += 1
+        else:
+            artist_tier += 1
+        heard = was_heard(track.artist, track.title) if was_heard is not None else True
+        scorable.append(
+            ScorableTrack(
+                uri=track.uri,
+                artist=track.artist,
+                title=track.title,
+                tags=tags,
+                tier=tier,
+                novel=not heard,
+            )
+        )
+
+    return scorable, LibraryCoverage(len(tracks), track_tier, artist_tier, untagged)
+
+
+def cached_tag_index(
+    tracks: Sequence[LibraryTrack],
+    tags_dir: Path = TAGS_DIR,
+    artist_tags_dir: Path = ARTIST_TAGS_DIR,
+) -> tuple[dict[tuple[str, str], list[str]], dict[str, list[str]]]:
+    """Tags for these tracks from the on-disk cache alone, making no request.
+
+    The cache is keyed on the raw strings it was fetched with, so a library row can only hit
+    it when the same raw strings were fetched. That is why the artist tier matters so much
+    here: artist names diverge between Spotify and Last.fm far less than titles do.
+    """
+    track_tags: dict[tuple[str, str], list[str]] = {}
+    artist_tags: dict[str, list[str]] = {}
+    for track in tracks:
+        rows = _read_cached(_cache_path(tags_dir, track.artist, track.title))
+        if rows:
+            track_tags[track_key(track.artist, track.title)] = [name for name, _ in rows]
+        norm = normalize_artist(track.artist)
+        if norm not in artist_tags:
+            artist_rows = _read_cached(_cache_path(artist_tags_dir, track.artist, ""))
+            if artist_rows:
+                artist_tags[norm] = [name for name, _ in artist_rows]
+    return track_tags, artist_tags
+
+
+def render_coverage(coverage: LibraryCoverage) -> str:
+    return (
+        f"library: {coverage.tracks} tracks; tagged track {coverage.track_tier}, "
+        f"artist {coverage.artist_tier}, none {coverage.untagged} "
+        f"-> {coverage.coverage:.1%} scorable"
+    )
