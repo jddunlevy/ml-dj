@@ -469,6 +469,17 @@ def test_earliness_is_clamped_to_the_unit_interval():
     assert state.v.tolist() == [-1.0, 0.0]
 
 
+def test_session_step_leaves_the_input_state_untouched():
+    # Per-step states have to be keepable: R's scrubber holds a list of them, and the spec's
+    # deferred per-step ranking would need one. Mutating in place would alias them all.
+    state = session_new(a_space(), decay=0.5, w=1.0)
+    stepped = session_step(state, {"outcome": "completed", "tags": ["indie"]})
+    assert state.v.tolist() == [0.0, 0.0]
+    assert state.history == []
+    assert stepped.v.tolist() == [1.0, 0.0]
+    assert stepped is not state
+
+
 def test_session_run_applies_every_event_in_order_and_records_history():
     events = [
         {"outcome": "completed", "tags": ["indie"]},
@@ -629,6 +640,13 @@ def session_new(
 
 
 def session_step(state: SessionState, event: Mapping[str, object]) -> SessionState:
+    """The state after one event. The input state is left untouched.
+
+    R's version copies on assignment, so returning a new state is what actually matches it -
+    mutating in place would alias every step to one object and make a list of per-step states
+    impossible. R's scrubber keeps exactly such a list, and the spec's deferred per-step
+    ranking would need one too.
+    """
     v = state.v * state.decay
     outcome = event.get("outcome")
     tags = list(event.get("tags") or [])
@@ -646,9 +664,13 @@ def session_step(state: SessionState, event: Mapping[str, object]) -> SessionSta
             f"unknown outcome {outcome!r} - expected completed, skipped or unknown"
         )
 
-    state.v = v
-    state.history.append(event)
-    return state
+    return SessionState(
+        space=state.space,
+        decay=state.decay,
+        w=state.w,
+        v=v,
+        history=[*state.history, event],
+    )
 
 
 def session_run(
@@ -935,8 +957,9 @@ of the project joins on.
 **Decision, stated rather than assumed:** the default run reads the cache only and makes no
 network call. A library track with no cached track-tier tags falls back to the artist tier, and
 with neither it is **excluded and counted**, never entered at a zero vector. Pulling missing tags
-from Last.fm is opt-in (`--pull-tags`, Task 9) because a 2,000-track library of mostly uncached
-tracks is thousands of rate-limited requests and must not happen behind an unsuspecting run.
+from Last.fm is deliberately NOT offered here - a 2,000-track library of mostly uncached tracks is
+thousands of rate-limited requests, and it must not happen behind an unsuspecting run. The
+coverage figure this task prints is what says whether it would be worth building at all.
 
 **Files:**
 - Modify: `src/mldj/library.py`
@@ -1854,7 +1877,6 @@ def test_the_playlist_subcommand_is_registered_with_its_defaults():
     assert (args.decay, args.w) == (0.85, 1.0)
     assert args.dry_run is False
     assert args.refresh_library is False
-    assert args.pull_tags is False
 ```
 
 - [ ] **Step 2: Run the test and watch it fail**
@@ -1933,9 +1955,6 @@ def _run(args) -> int:
             "(cached; --refresh-library to refetch)"
         )
 
-    if args.pull_tags:
-        print("--pull-tags is not implemented; this run reads the tag cache only")
-
     track_tags, artist_tags = cached_tag_index(tracks)
     history = build_history(read_scrobbles(SCROBBLES_PATH))
     scorable, coverage = tag_library(
@@ -1997,7 +2016,6 @@ def register(subparsers) -> None:
     p.add_argument("--epsilon", type=float, default=DEFAULT_EPSILON)
     p.add_argument("--library", default=str(LIBRARY_PATH))
     p.add_argument("--refresh-library", action="store_true", help="refetch instead of caching")
-    p.add_argument("--pull-tags", action="store_true", help="reserved; not implemented")
     p.add_argument("--dry-run", action="store_true", help="print the tracklist, create nothing")
     p.set_defaults(handler=_run)
 ```
@@ -2066,9 +2084,9 @@ git commit -m "feat: mldj playlist - a session as a private Spotify playlist"
 - **The per-step vector** — ranking each slot against the vector as it stood rather than against
   the final one. Spec open question 1: a playlist that narrates the session rather than
   summarising it. A different and larger design.
-- **`--pull-tags`** — fetching Last.fm tags for library tracks the cache has never seen. The flag
-  is registered and prints that it is unimplemented, so a run is never silently different from
-  what was asked. Worth building only if Task 9's coverage figure comes back low.
+- **Pulling tags for library tracks the cache has never seen.** No flag is registered for it:
+  an inert `--pull-tags` that only printed "not implemented" would be dead code. Add the flag in
+  the commit that implements it, and only if Task 9's coverage figure comes back low.
 - **A Last.fm discovery pool** as a second, separately labelled source. Out of scope by the spec.
 - **Queue writes and playback control.** One endpoint away, and they stay out until the pitch is
   delivered.
