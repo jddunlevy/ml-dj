@@ -60,9 +60,22 @@ def tag_vector(space: TagSpace, tags: Sequence[str]) -> np.ndarray:
 
     Unknown tags are dropped rather than raised - Last.fm returns tags the vocabulary
     filtered out, routinely.
+
+    Deduplicated by canonical term, first occurrence kept: R's equivalent is
+    `intersect(tags, space$terms)`, and R's `intersect` returns unique matches, so a tag list
+    with the same canonical term twice (e.g. "Hip-Hop" and "hip hop") must count it once here
+    too, or Python and R diverge on real Last.fm data that is routinely this repetitive. Do
+    not "optimize" this dedupe away - the two ports must keep matching.
     """
     index = space.index
-    rows = [index[canonical_tag(tag)] for tag in tags if canonical_tag(tag) in index]
+    seen: set[int] = set()
+    rows: list[int] = []
+    for tag in tags:
+        term = canonical_tag(tag)
+        i = index.get(term)
+        if i is not None and i not in seen:
+            seen.add(i)
+            rows.append(i)
     if not rows:
         return np.zeros(space.vectors.shape[1], dtype=np.float64)
     return _unit_rows(space)[rows].sum(axis=0)

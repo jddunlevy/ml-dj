@@ -42,6 +42,27 @@ def test_a_zero_norm_term_contributes_nothing_rather_than_a_nan():
     assert tag_vector(a_space(), ["loud"]).tolist() == [0.0, 0.0]
 
 
+def test_tag_vector_dedupes_a_repeated_canonical_term_like_r_s_intersect():
+    # R's tag_vector uses intersect(tags, space$terms), and R's intersect returns unique
+    # matches. Python must agree: a tag list with "indie" twice must score the same as the
+    # list with the duplicate removed, not double-count it.
+    space = a_space()
+    assert tag_vector(space, ["indie", "indie", "shoegaze"]).tolist() == tag_vector(
+        space, ["indie", "shoegaze"]
+    ).tolist()
+
+
+def test_tag_vector_dedupes_differently_spelled_tags_that_canonicalize_the_same():
+    # The real-world shape: Last.fm returns distinct strings ("Hip-Hop", "hip hop") that
+    # canonical_tag collapses onto one term. An inline space with a real-looking VARIANTS-
+    # style canonicalization is not needed here - canonical_tag itself does the collapsing
+    # (casefolding and punctuation-stripping), so "Indie" and "INDIE " both land on "indie".
+    space = a_space()
+    assert tag_vector(space, ["Indie", "INDIE ", "shoegaze"]).tolist() == tag_vector(
+        space, ["indie", "shoegaze"]
+    ).tolist()
+
+
 def test_a_completed_track_adds_its_tags():
     state = session_step(
         session_new(a_space(), decay=0.5, w=2.0), {"outcome": "completed", "tags": ["indie"]}
@@ -109,8 +130,15 @@ def test_cosine_all_is_descending_and_breaks_ties_in_the_space_term_order():
     # R sorts with a stable sort, so equal cosines keep the space's own ordering. np.argsort
     # promises nothing there, and TagSpace.neighbours breaks ties by term NAME instead - a
     # different rule. Copying that rule here would desynchronise the trace.
-    space = TagSpace(terms=("a", "b"), vectors=np.array([[1.0, 0.0], [1.0, 0.0]]), meta={})
-    assert [term for term, _ in cosine_all(space, np.array([1.0, 0.0]))] == ["a", "b"]
+    #
+    # Terms are deliberately out of alphabetical order ("b" before "a"). With identical
+    # vectors, the space's positional order and alphabetical order agree only when the terms
+    # happen to already be alphabetical - which would let the by-name rule this test is meant
+    # to rule out pass right along with the correct one. Putting "b" first makes the two
+    # rules disagree: the correct (positional) rule keeps ["b", "a"], the forbidden (by-name)
+    # rule would produce ["a", "b"].
+    space = TagSpace(terms=("b", "a"), vectors=np.array([[1.0, 0.0], [1.0, 0.0]]), meta={})
+    assert [term for term, _ in cosine_all(space, np.array([1.0, 0.0]))] == ["b", "a"]
 
 
 def test_cosine_all_scores_a_zero_vector_at_zero_everywhere_rather_than_nan():
