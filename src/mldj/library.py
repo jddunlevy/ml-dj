@@ -20,7 +20,9 @@ from pathlib import Path
 
 from mldj.lastfm import ARTIST_TAGS_DIR, TAGS_DIR, _cache_path, _read_cached
 from mldj.match import normalize_artist, track_key
+from mldj.scrobbles import Scrobble
 from mldj.space.vocab import canonical_tag
+from mldj.tags import index_corpus
 from mldj.transport import Transport
 
 SAVED_URL = "https://api.spotify.com/v1/me/tracks?limit=50"
@@ -192,33 +194,72 @@ def cached_tag_index(
     tracks: Sequence[LibraryTrack],
     tags_dir: Path = TAGS_DIR,
     artist_tags_dir: Path = ARTIST_TAGS_DIR,
+    scrobbles: Sequence[Scrobble] | None = None,
 ) -> tuple[dict[tuple[str, str], list[str]], dict[str, list[str]]]:
     """Tags for these tracks from the on-disk cache alone, making no request.
 
-    The cache is keyed on the raw strings it was fetched with, so a library row can only hit
-    it when the same raw strings were fetched. That is why the artist tier matters so much
-    here: artist names diverge between Spotify and Last.fm far less than titles do.
+    The cache is keyed on `hashlib.sha1(f"{artist}\\t{title}")` over the RAW strings it was
+    fetched with - and it was fetched with Last.fm's scrobble strings, while a library row
+    carries Spotify's. A remaster suffix ("Blue Monday - 2016 Remaster" vs "Blue Monday")
+    means a probe of the row's own raw strings misses the track-tier cache file entirely and
+    falls back to the artist tier, which is identical across every track by that artist and
+    so makes the ranking respond to the artist rather than the track.
+
+    `scrobbles`, when supplied, fixes that: `tags.index_corpus` maps each `track_key` /
+    normalized artist to the first-seen RAW (artist, title) Last.fm was actually queried
+    with, which is exactly what the cache is keyed on. Probing with those strings - the same
+    shape `tags.coverage_only` uses - is what lets a remaster-suffix row hit the track tier.
+    `index_corpus` already deduplicates to one representative per key, so this corpus pass
+    costs exactly one cache read per distinct key, however many scrobbles share it.
+
+    The library row's own raw strings are still probed too, for a row the corpus does not
+    know at all (never scrobbled, say) - nothing that worked before regresses. **On a
+    conflict the corpus wins**: its strings are what the cache was fetched with, so the
+    library pass only fills in a key the corpus pass left empty; a disagreement between the
+    two would mean they are reading different cache files, not that one is more correct.
 
     An artist whose cache file is missing is probed at most once: `checked` remembers every
-    normalized artist already looked up, hit or miss, so a library with many tracks per
-    uncached artist does not re-read the same absent path once per track. `artist_tags` itself
-    stays miss-free - a miss is never stored there, under an empty list or otherwise - so
-    `tag_library`'s `artist_tags.get(norm, ())` still falls back to () for a known miss exactly
-    as it does for an artist never looked up at all.
+    normalized artist already looked up, hit or miss (by either pass), so a library with
+    many tracks per uncached artist does not re-read the same absent path once per track.
+    `artist_tags` itself stays miss-free - a miss is never stored there, under an empty list
+    or otherwise - so `tag_library`'s `artist_tags.get(norm, ())` still falls back to () for
+    a known miss exactly as it does for an artist never looked up at all.
     """
     track_tags: dict[tuple[str, str], list[str]] = {}
     artist_tags: dict[str, list[str]] = {}
     checked: set[str] = set()
+    # Every key already probed by the corpus pass, hit or miss - mirrors `checked` for the
+    # artist tier, and for the same reason: a miss must not be re-read by the library pass
+    # just because it was a miss rather than a hit.
+    track_checked: set[tuple[str, str]] = set()
+
+    if scrobbles is not None:
+        index = index_corpus(scrobbles)
+        for key, (artist, title) in index.track_reps.items():
+            track_checked.add(key)
+            rows = _read_cached(_cache_path(tags_dir, artist, title))
+            if rows:
+                track_tags[key] = [name for name, _ in rows]
+        for norm, artist in index.artist_reps.items():
+            checked.add(norm)
+            artist_rows = _read_cached(_cache_path(artist_tags_dir, artist, ""))
+            if artist_rows:
+                artist_tags[norm] = [name for name, _ in artist_rows]
+
     for track in tracks:
-        rows = _read_cached(_cache_path(tags_dir, track.artist, track.title))
-        if rows:
-            track_tags[track_key(track.artist, track.title)] = [name for name, _ in rows]
+        key = track_key(track.artist, track.title)
+        if key not in track_checked:
+            track_checked.add(key)
+            rows = _read_cached(_cache_path(tags_dir, track.artist, track.title))
+            if rows:
+                track_tags[key] = [name for name, _ in rows]
         norm = normalize_artist(track.artist)
         if norm not in checked:
             checked.add(norm)
             artist_rows = _read_cached(_cache_path(artist_tags_dir, track.artist, ""))
             if artist_rows:
                 artist_tags[norm] = [name for name, _ in artist_rows]
+
     return track_tags, artist_tags
 
 

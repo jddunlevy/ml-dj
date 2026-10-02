@@ -17,6 +17,7 @@ from mldj.library import (
     write_library,
 )
 from mldj.match import normalize_artist, track_key
+from mldj.scrobbles import Scrobble
 from mldj.transport import Response
 
 
@@ -288,4 +289,112 @@ def test_cached_tag_index_reports_neither_tier_when_nothing_is_cached(tmp_path):
 
     assert track_tags == {}
     assert artist_tags == {}
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_finds_the_track_tier_through_the_corpus_when_raw_strings_differ(
+    tmp_path,
+):
+    # The headline case. The library carries Spotify's title, with a remaster suffix; the
+    # cache was filled under Last.fm's own title, "Blue Monday" alone. A probe of the
+    # library row's own raw strings misses that cache file and the track falls back to the
+    # artist tier instead - which is exactly the bug. The scrobble corpus's first-seen
+    # (artist, title) for this track_key IS the Last.fm spelling the cache holds, so a
+    # corpus-driven probe is what actually finds it.
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    _write_cached(_cache_path(tags_dir, "New Order", "Blue Monday"), [("newwave", 100)])
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Blue Monday - 2016 Remaster")]
+    scrobbles = [Scrobble(uts=1, artist="New Order", title="Blue Monday", album="")]
+
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir, scrobbles=scrobbles
+    )
+
+    key = track_key("New Order", "Blue Monday - 2016 Remaster")
+    assert key == track_key("New Order", "Blue Monday")  # same track_key either spelling
+    assert track_tags == {key: ["newwave"]}
+    assert artist_tags == {}
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_still_finds_a_library_rows_own_raw_name_hit_with_a_corpus_supplied(
+    tmp_path,
+):
+    # No regression: a library row that hits the cache under its own raw strings must still
+    # work once a corpus is supplied, even when the corpus has never heard of that track.
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    _write_cached(_cache_path(tags_dir, "New Order", "Blue Monday"), [("newwave", 100)])
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Blue Monday")]
+    scrobbles = [Scrobble(uts=1, artist="Someone Else", title="Other Song", album="")]
+
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir, scrobbles=scrobbles
+    )
+
+    assert track_tags == {track_key("New Order", "Blue Monday"): ["newwave"]}
+    assert artist_tags == {}
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_consults_the_corpus_for_a_distinct_key_at_most_once(
+    monkeypatch, tmp_path
+):
+    # Many plays of the same track collapse to one entry in index_corpus().track_reps, so
+    # the corpus pass must read that track's cache path exactly once - not once per
+    # scrobble, and not once more again in the library pass for the same key.
+    import mldj.library as library_module
+
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    track_path = _cache_path(tags_dir, "New Order", "Blue Monday")
+
+    real_read_cached = library_module._read_cached
+    reads_of_track_path: list[object] = []
+
+    def counting_read_cached(path):
+        if path == track_path:
+            reads_of_track_path.append(path)
+        return real_read_cached(path)
+
+    monkeypatch.setattr(library_module, "_read_cached", counting_read_cached)
+
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Blue Monday")]
+    scrobbles = [
+        Scrobble(uts=i, artist="New Order", title="Blue Monday", album="") for i in range(5)
+    ]
+
+    cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir, scrobbles=scrobbles
+    )
+
+    assert len(reads_of_track_path) == 1, (
+        f"expected the track cache path to be read exactly once across the corpus pass "
+        f"and the library pass, got {len(reads_of_track_path)}"
+    )
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_with_no_corpus_supplied_behaves_exactly_as_before(tmp_path):
+    # scrobbles defaults to None: a library row's track-tier cache file filed under a
+    # *different* raw spelling than its own must NOT be found absent a corpus - that is the
+    # pre-existing, documented limitation this task's scope addition fixes only when a
+    # corpus is actually supplied.
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    _write_cached(_cache_path(tags_dir, "New Order", "Blue Monday"), [("newwave", 100)])
+    _write_cached(_cache_path(artist_tags_dir, "New Order", ""), [("postpunk", 50)])
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Blue Monday - 2016 Remaster")]
+
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir
+    )
+
+    assert track_tags == {}
+    assert artist_tags == {normalize_artist("New Order"): ["postpunk"]}
     assert _real_cache_listing() == before
