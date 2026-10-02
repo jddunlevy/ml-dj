@@ -46,6 +46,25 @@ class Transport(Protocol):
         headers: Mapping[str, str] | None = None,
     ) -> Response: ...
 
+    def post_json(
+        self,
+        url: str,
+        payload: Mapping[str, object],
+        headers: Mapping[str, str] | None = None,
+    ) -> Response: ...
+
+
+def _json_request(
+    url: str,
+    payload: Mapping[str, object],
+    headers: Mapping[str, str] | None = None,
+) -> urllib.request.Request:
+    """A POST carrying a JSON body. The content-type is ours, not the caller's: a form
+    content-type on a JSON body earns a 400 whose message names nothing useful."""
+    body = json.dumps(payload).encode("utf-8")
+    merged = {**dict(headers or {}), "Content-Type": "application/json"}
+    return urllib.request.Request(url, data=body, headers=merged, method="POST")
+
 
 class UrllibTransport:
     """stdlib transport. No third-party HTTP client in Phase 0."""
@@ -67,6 +86,14 @@ class UrllibTransport:
         merged = {"Content-Type": "application/x-www-form-urlencoded", **dict(headers or {})}
         request = urllib.request.Request(url, data=body, headers=merged, method="POST")
         return self._send(request)
+
+    def post_json(
+        self,
+        url: str,
+        payload: Mapping[str, object],
+        headers: Mapping[str, str] | None = None,
+    ) -> Response:
+        return self._send(_json_request(url, payload, headers))
 
     def _send(self, request: urllib.request.Request) -> Response:
         try:

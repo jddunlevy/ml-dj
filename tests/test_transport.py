@@ -1,7 +1,7 @@
 import pytest
 
 from fakes import FakeClock, FakeTransport
-from mldj.transport import DEFAULT_RETRY_MS, Response, retry_after_ms
+from mldj.transport import DEFAULT_RETRY_MS, Response, _json_request, retry_after_ms
 
 
 def test_response_json_decodes_the_body():
@@ -58,3 +58,21 @@ def test_fake_transport_fails_loudly_when_the_script_runs_out():
     transport = FakeTransport([])
     with pytest.raises(AssertionError):
         transport.get("https://example.invalid/a")
+
+
+def test_a_json_post_carries_the_payload_as_a_utf8_json_body():
+    request = _json_request(
+        "https://api.spotify.com/v1/playlists/p1/tracks",
+        {"uris": ["spotify:track:a"]},
+        {"Authorization": "Bearer tok"},
+    )
+    assert request.get_method() == "POST"
+    assert request.data == b'{"uris": ["spotify:track:a"]}'
+    assert request.get_header("Content-type") == "application/json"
+    assert request.get_header("Authorization") == "Bearer tok"
+
+
+def test_a_json_post_does_not_let_a_caller_override_the_content_type():
+    # A form content-type on a JSON body is a 400 from Spotify with an unhelpful message.
+    request = _json_request("https://x/y", {"a": 1}, {"Content-Type": "text/plain"})
+    assert request.get_header("Content-type") == "application/json"
