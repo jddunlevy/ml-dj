@@ -1002,7 +1002,7 @@ def test_tag_library_finds_tags_through_the_normalized_key_not_the_raw_string():
 
 def test_tag_library_backs_off_to_the_artist_tier_and_records_the_tier():
     tracks = [LibraryTrack("spotify:track:1", "New Order", "Temptation")]
-    scorable, coverage = tag_library(tracks, {}, {"neworder": ["newwave"]})
+    scorable, coverage = tag_library(tracks, {}, {"new order": ["newwave"]})
     assert scorable[0].tier == "artist"
     assert coverage.artist_tier == 1
 
@@ -1257,8 +1257,12 @@ def test_a_track_played_in_the_session_is_excluded_from_the_pool():
 
 
 def test_exclusion_joins_on_the_normalized_key_so_a_remaster_suffix_cannot_slip_through():
+    # Note the key literals keep their spaces: normalize_artist("New Order") is "new order",
+    # NOT "neworder". canonical_tag strips spaces for TAGS ("New Wave" -> "newwave") but the
+    # track-key normalizers do not. Getting this wrong writes a test that fails whatever the
+    # implementation does.
     tracks = [track("spotify:track:1", "New Order", "Blue Monday - 2016 Remaster")]
-    events = [{"key": ["neworder", "bluemonday"]}]
+    events = [{"key": ["new order", "blue monday"]}]
     assert exclude_played(tracks, events) == []
 
 
