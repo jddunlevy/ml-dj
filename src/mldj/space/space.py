@@ -24,7 +24,7 @@ near-degenerate and the basis is only reproducible per-seed.
 """
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +50,12 @@ REQUIRED_META = (
     "item_counts",
     "tier_counts",
 )
+
+# The four terms the Phase 1 privacy review confirmed are artist names rather than
+# descriptors. Normalized keys, and identical to R/space.R's EXCLUDED_TERMS - two
+# implementations of one exclusion list must not drift. The other four flagged terms
+# (electronic, love, fun, lush) are real bands AND ordinary descriptors; they stay.
+EXCLUDED_TERMS = ("radiohead", "kanyewest", "kendricklamar", "timbaland")
 
 
 @dataclass(frozen=True)
@@ -176,7 +182,13 @@ def save_space(space: TagSpace, path: Path = DEFAULT_SPACE_PATH) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def load_space(path: Path = DEFAULT_SPACE_PATH) -> TagSpace:
+def load_space(path: Path = DEFAULT_SPACE_PATH, exclude: Collection[str] = ()) -> TagSpace:
+    """Read the versioned export.
+
+    `exclude` is opt-in and empty by default. The engine passes EXCLUDED_TERMS because the
+    prototype does and parity is measured against it; the sweep and the evaluation must NOT,
+    because the recorded baselines were taken over the full vocabulary.
+    """
     raw = json.loads(path.read_text(encoding="utf-8"))
     version = raw.get("format_version")
     if version != SPACE_FORMAT_VERSION:
@@ -184,9 +196,16 @@ def load_space(path: Path = DEFAULT_SPACE_PATH) -> TagSpace:
             f"format_version {version!r} is not the expected {SPACE_FORMAT_VERSION}; "
             "rebuild the space rather than reading it with the wrong reader"
         )
+    terms = list(raw["terms"])
+    vectors = np.array(raw["vectors"], dtype=np.float64)
+    banned = {canonical_tag(term) for term in exclude}
+    if banned:
+        keep = [i for i, term in enumerate(terms) if canonical_tag(term) not in banned]
+        terms = [terms[i] for i in keep]
+        vectors = vectors[keep] if keep else vectors[:0]
     return TagSpace(
-        terms=tuple(raw["terms"]),
-        vectors=np.array(raw["vectors"], dtype=np.float64),
+        terms=tuple(terms),
+        vectors=vectors,
         meta=raw["meta"],
         display=raw.get("display", {}),
     )
