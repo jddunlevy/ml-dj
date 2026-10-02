@@ -143,12 +143,23 @@ def test_create_playlist_posts_a_private_playlist_and_returns_its_id():
     assert payload == {"name": "ml-dj - s1", "public": False, "description": "provenance"}
 
 
+def test_add_chunk_is_pinned_to_spotifys_documented_ceiling():
+    # ADD_CHUNK is a load-bearing external constraint, not a tunable: Spotify's playlist-items
+    # add endpoint rejects a request over 100 URIs. Pin the literal so the constant cannot drift
+    # without a test noticing - asserting it against itself (as the chunking test below used to)
+    # would pass for any value and catch nothing.
+    assert ADD_CHUNK == 100
+
+
 def test_add_tracks_chunks_at_the_api_limit():
-    uris = [f"spotify:track:{i}" for i in range(ADD_CHUNK + 5)]
+    # Sizes are hardcoded, not derived from ADD_CHUNK: deriving the input and the expected chunk
+    # sizes from the same imported constant makes this pass for ANY value of ADD_CHUNK, which is
+    # exactly how a reviewer's ADD_CHUNK = 50 slipped through all 19 tests before this fix.
+    uris = [f"spotify:track:{i}" for i in range(105)]
     transport = FakeTransport([ok({"snapshot_id": "a"}), ok({"snapshot_id": "b"})])
-    assert add_tracks(transport, lambda: "tok", "pl1", uris) == ADD_CHUNK + 5
+    assert add_tracks(transport, lambda: "tok", "pl1", uris) == 105
     assert len(transport.requests) == 2
-    assert len(transport.requests[0][2]["uris"]) == ADD_CHUNK
+    assert len(transport.requests[0][2]["uris"]) == 100
     assert len(transport.requests[1][2]["uris"]) == 5
 
 
@@ -221,3 +232,10 @@ def test_the_description_records_what_produced_the_playlist():
     )
     for fragment in ("dj-20260930T142116Z", "1504", "0.85", "323", "2026-09-30"):
         assert fragment in text
+    # w and epsilon are asserted as labelled substrings, not bare numbers: w=1.0 and
+    # vocabulary_size=323 both contain digits that recur elsewhere in the string, and
+    # epsilon=0.0 is easy to match by accident against some other "0". "w 1.0" and
+    # "epsilon 0.0" are how playlist_description actually labels them, so these can only pass
+    # if both fields are genuinely present with their values.
+    assert "w 1.0" in text
+    assert "epsilon 0.0" in text
