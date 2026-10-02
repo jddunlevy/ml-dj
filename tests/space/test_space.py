@@ -314,6 +314,28 @@ def test_load_space_excludes_nothing_by_default(tmp_path):
     assert load_space(_saved(tmp_path)).terms == ("indie", "radiohead", "shoegaze")
 
 
+def test_load_space_filters_display_to_surviving_terms(tmp_path):
+    # The display dict must be rebuilt scoped to surviving terms, not passed through
+    # unfiltered. A term like "radiohead" is excluded to block it from reaching a display
+    # surface; if it survives in display, the exclusion is incomplete - and the privacy gate
+    # fails. R/space.R rebuilds display scoped to terms; Python must match.
+    space = load_space(_saved(tmp_path), exclude=("radiohead",))
+    # Excluded term must not appear in display
+    assert "radiohead" not in space.display
+    # Surviving terms' display entries must be present
+    assert "indie" in space.display
+    assert "shoegaze" in space.display
+
+
+def test_load_space_preserves_full_display_when_nothing_is_excluded(tmp_path):
+    # Default behaviour is unchanged: with no exclude argument, display comes back exactly
+    # as it is in the file. Published baselines depend on this.
+    loaded = load_space(_saved(tmp_path))
+    # Should have the radiohead entry since nothing is excluded
+    assert "radiohead" in loaded.display
+    assert loaded.display["radiohead"] == "radiohead"
+
+
 def test_the_excluded_terms_are_the_four_the_privacy_review_confirmed():
     # R/space.R holds the same list. Two implementations of one exclusion must not drift.
     from mldj.space.space import EXCLUDED_TERMS
