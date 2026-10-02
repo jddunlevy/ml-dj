@@ -82,9 +82,11 @@ Three `--label dj` sessions are captured, **1.99 of the 2.00 target hours** but 
 no contrast session under another label. `reports/phase0-2026-09-30.md` exists and is gitignored.
 **Run `mldj capture --label dj` whenever the DJ is on** — and see the power argument below: the
 reason to keep capturing has changed from filling an empty directory to buying statistical
-resolution. **Drop the poll interval first:** the report's verdict is `"too slow"` (shortest
-track-change gap 1129 ms at a declared 1000 ms interval), and every session captured at 1000 ms
-inherits that, unrepairably.
+resolution. **The poll interval is now 500 ms** (2026-10-02), because the report's verdict on the
+first three captures was `"too slow"` - shortest track-change gap 1129 ms at a declared 1000 ms
+interval. Those three sessions inherit that verdict unrepairably; every session from here does not.
+Re-read the verdict after each capture, since 1129 ms is a minimum over sessions so far and a faster
+change would reopen it.
 
 **`artist_delta` came back +0.0000 and it is a floored probe, not a result. Do not quote it as
 "the DJ does not respond to a skip".** Both arms are 0.0%, not one: across 42 adjacent pairs there

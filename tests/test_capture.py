@@ -1,7 +1,7 @@
 import json
 
 from fakes import FakeClock, FakeTransport
-from mldj.capture import run_capture
+from mldj.capture import DEFAULT_INTERVAL_MS, run_capture
 from mldj.events import EventWriter, read_events
 from mldj.transport import Response
 
@@ -120,3 +120,22 @@ def test_capture_writes_session_end_even_when_the_loop_raises(tmp_path):
     events = list(read_events(path))
     assert events[-1]["type"] == "session_end"
     assert events[-1]["reason"] == "interrupted"
+
+
+# The Phase 0 report's verdict rule: an interval is "too slow" when the shortest observed gap
+# between track changes is at or below two intervals, because the change lands inside the
+# polling resolution. The shortest gap measured across the three dj captures was 1129 ms
+# (reports/phase0-2026-09-30.md), so two intervals must fit under it with room to spare.
+SHORTEST_OBSERVED_TRACK_GAP_MS = 1129
+
+
+def test_the_default_interval_resolves_the_shortest_track_gap_phase_0_measured():
+    assert 2 * DEFAULT_INTERVAL_MS < SHORTEST_OBSERVED_TRACK_GAP_MS
+
+
+def test_the_default_interval_stays_inside_the_rate_allowance_with_headroom():
+    # Spotify's rough allowance is 180 requests/minute; a 429 is a hole in the record, which
+    # is worse than coarse resolution, so the loop keeps a third of the allowance in reserve
+    # for token refresh and retries.
+    requests_per_minute = 60_000 / DEFAULT_INTERVAL_MS
+    assert requests_per_minute <= 120

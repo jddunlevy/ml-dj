@@ -1,9 +1,21 @@
 """Poll Spotify's currently-playing endpoint and append raw events to a session log.
 
-Poll interval: the default is 1000 ms, against cd-player's 5000 ms, which collapses fast
-skips and multi-skip bursts. At 1 request/second this makes 60 requests/minute, well
-inside Spotify's rough 180/minute allowance. 1000 ms is a hypothesis, not a settled
-value - `mldj report --diagnostics` (Task 12) is where it gets justified or changed.
+Poll interval: the default is 500 ms, and it is now settled by measurement rather than
+assumed. The first three dj captures declared 1000 ms and `mldj report --diagnostics`
+returned "too slow": the shortest observed gap between track changes was 1129 ms, and the
+verdict rule flags any interval whose double reaches that gap, because the change then
+lands inside the polling resolution and fast skips collapse into one another. Clearing it
+requires an interval under ~564 ms.
+
+500 ms rather than lower: at 2 requests/second the loop makes 120 requests/minute against
+Spotify's rough 180/minute allowance, keeping a third in reserve for the token refresh and
+retries. A 429 is a hole in the record, which is worse than coarse resolution - missing
+data rather than quantized data - so the remaining headroom is not worth trading for
+margin against the verdict rule.
+
+The 1129 ms figure is the minimum over the sessions captured so far, so a future session
+with a faster change could reopen the question. Re-read the verdict after each capture;
+it is printed by `mldj report --diagnostics-only`.
 """
 
 import argparse
@@ -24,7 +36,7 @@ from mldj.events import (
 from mldj.nowplaying import ENDPOINT, parse_now_playing
 from mldj.transport import DEFAULT_RETRY_MS, Transport, UrllibTransport, retry_after_ms
 
-DEFAULT_INTERVAL_MS = 1000
+DEFAULT_INTERVAL_MS = 500
 
 
 def run_capture(
