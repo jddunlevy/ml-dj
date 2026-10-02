@@ -3,18 +3,20 @@ import json
 import pytest
 
 from fakes import FakeTransport
+from mldj.lastfm import ARTIST_TAGS_DIR, TAGS_DIR, _cache_path, _write_cached
 from mldj.library import (
     SAVED_URL,
     TOP_URL,
     LibraryCoverage,
     LibraryTrack,
+    cached_tag_index,
     fetch_library,
     read_library,
     render_coverage,
     tag_library,
     write_library,
 )
-from mldj.match import track_key
+from mldj.match import normalize_artist, track_key
 from mldj.transport import Response
 
 
@@ -189,3 +191,101 @@ def test_coverage_of_an_empty_library_is_zero_rather_than_a_division_error():
 def test_render_coverage_names_every_tier_so_a_thin_pool_is_attributable():
     text = render_coverage(LibraryCoverage(tracks=4, track_tier=1, artist_tier=2, untagged=1))
     assert "4" in text and "track 1" in text and "artist 2" in text and "75.0%" in text
+
+
+def _real_cache_listing() -> tuple[list[str], list[str]]:
+    def names(path):
+        return sorted(p.name for p in path.glob("*")) if path.exists() else []
+
+    return names(TAGS_DIR), names(ARTIST_TAGS_DIR)
+
+
+def test_cached_tag_index_probes_an_uncached_artist_at_most_once(monkeypatch, tmp_path):
+    # Three tracks by the same artist, who has no cached tags at all (and no track-tier
+    # tags either). Without memoizing the miss, each track re-reads the same missing
+    # artist-tags path from disk - this counts exactly those reads and pins them at 1,
+    # not 3. Run against the unfixed guard (`if norm not in artist_tags:`) this reports 3.
+    import mldj.library as library_module
+
+    before = _real_cache_listing()
+
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    artist_path = _cache_path(artist_tags_dir, "Ghost Artist", "")
+
+    real_read_cached = library_module._read_cached
+    reads_of_artist_path: list[object] = []
+
+    def counting_read_cached(path):
+        if path == artist_path:
+            reads_of_artist_path.append(path)
+        return real_read_cached(path)
+
+    monkeypatch.setattr(library_module, "_read_cached", counting_read_cached)
+
+    tracks = [
+        LibraryTrack("spotify:track:1", "Ghost Artist", "Song A"),
+        LibraryTrack("spotify:track:2", "Ghost Artist", "Song B"),
+        LibraryTrack("spotify:track:3", "Ghost Artist", "Song C"),
+    ]
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir
+    )
+
+    assert len(reads_of_artist_path) == 1, (
+        f"expected the missing artist-tags path to be read exactly once, "
+        f"got {len(reads_of_artist_path)} reads"
+    )
+    assert track_tags == {}
+    assert artist_tags == {}
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_finds_a_track_tier_hit_under_the_normalized_key(tmp_path):
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    # The cache is keyed on the raw strings last.fm was queried with, so the fake cache file
+    # is written under the exact artist/title the track below carries.
+    _write_cached(_cache_path(tags_dir, "New Order", "Blue Monday"), [("newwave", 100)])
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Blue Monday")]
+
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir
+    )
+
+    assert track_tags == {track_key("New Order", "Blue Monday"): ["newwave"]}
+    assert artist_tags == {}
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_backs_off_to_an_artist_tier_hit(tmp_path):
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    # No track-tier cache file for this track, but the artist has one.
+    _write_cached(_cache_path(artist_tags_dir, "New Order", ""), [("newwave", 100)])
+    tracks = [LibraryTrack("spotify:track:1", "New Order", "Temptation")]
+
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir
+    )
+
+    assert track_tags == {}
+    assert artist_tags == {normalize_artist("New Order"): ["newwave"]}
+    assert _real_cache_listing() == before
+
+
+def test_cached_tag_index_reports_neither_tier_when_nothing_is_cached(tmp_path):
+    before = _real_cache_listing()
+    tags_dir = tmp_path / "tags"
+    artist_tags_dir = tmp_path / "artist-tags"
+    tracks = [LibraryTrack("spotify:track:1", "Nobody", "Untagged")]
+
+    track_tags, artist_tags = cached_tag_index(
+        tracks, tags_dir=tags_dir, artist_tags_dir=artist_tags_dir
+    )
+
+    assert track_tags == {}
+    assert artist_tags == {}
+    assert _real_cache_listing() == before

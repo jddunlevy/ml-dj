@@ -198,15 +198,24 @@ def cached_tag_index(
     The cache is keyed on the raw strings it was fetched with, so a library row can only hit
     it when the same raw strings were fetched. That is why the artist tier matters so much
     here: artist names diverge between Spotify and Last.fm far less than titles do.
+
+    An artist whose cache file is missing is probed at most once: `checked` remembers every
+    normalized artist already looked up, hit or miss, so a library with many tracks per
+    uncached artist does not re-read the same absent path once per track. `artist_tags` itself
+    stays miss-free - a miss is never stored there, under an empty list or otherwise - so
+    `tag_library`'s `artist_tags.get(norm, ())` still falls back to () for a known miss exactly
+    as it does for an artist never looked up at all.
     """
     track_tags: dict[tuple[str, str], list[str]] = {}
     artist_tags: dict[str, list[str]] = {}
+    checked: set[str] = set()
     for track in tracks:
         rows = _read_cached(_cache_path(tags_dir, track.artist, track.title))
         if rows:
             track_tags[track_key(track.artist, track.title)] = [name for name, _ in rows]
         norm = normalize_artist(track.artist)
-        if norm not in artist_tags:
+        if norm not in checked:
+            checked.add(norm)
             artist_rows = _read_cached(_cache_path(artist_tags_dir, track.artist, ""))
             if artist_rows:
                 artist_tags[norm] = [name for name, _ in artist_rows]
