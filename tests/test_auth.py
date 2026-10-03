@@ -14,6 +14,7 @@ from mldj.auth import (
     code_challenge,
     exchange_code,
     load_tokens,
+    login,
     merge_token_response,
     parse_callback_code,
     random_verifier,
@@ -180,3 +181,61 @@ def test_the_token_never_carries_playback_control():
     # radius of a bug in a tool that is one typo from writing to a real account. Queue writing
     # is Phase 4 and stays out until the pitch is delivered.
     assert "user-modify-playback-state" not in SCOPE
+
+
+def test_login_binds_the_callback_server_before_opening_the_browser(tmp_path, monkeypatch):
+    """The browser must not be sent at Spotify until the loopback is accepting.
+
+    On a re-authorization Spotify remembers the prior consent and redirects without showing
+    a consent screen, so the callback can arrive within milliseconds of the browser opening.
+    If login() opens the browser first and binds second, that callback is refused and the
+    user sees ERR_CONNECTION_REFUSED with the authorization code already spent.
+    `wait_for_code` grew `on_ready` for exactly this; login() has to use it.
+
+    Asserting on a racing request would be flaky - the bind usually wins. So the fake browser
+    asserts the condition directly: at the moment the browser is opened, can a client connect
+    to the port? That is precisely what the real browser is about to attempt.
+    """
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+
+    connectable: list[bool] = []
+
+    def fake_open(url: str) -> bool:
+        sock = socket.socket()
+        sock.settimeout(2)
+        try:
+            sock.connect(("127.0.0.1", port))
+            connectable.append(True)
+        except OSError:
+            connectable.append(False)
+        finally:
+            sock.close()
+
+        def deliver() -> None:
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/callback?code=race-code", timeout=5
+                ) as r:
+                    r.read()
+            except OSError:
+                pass
+
+        threading.Thread(target=deliver, daemon=True).start()
+        return True
+
+    monkeypatch.setattr("mldj.auth.webbrowser.open", fake_open)
+
+    payload = json.dumps(
+        {"access_token": "after-race", "refresh_token": "r2", "expires_in": 3600}
+    )
+    transport = FakeTransport([Response(200, payload.encode())])
+
+    tokens = login(transport, FakeClock(0), "client-abc", tmp_path / "tokens.json", port=port)
+
+    assert connectable == [True], (
+        "login() opened the browser before the loopback was accepting - a callback "
+        "arriving now would be refused"
+    )
+    assert tokens.access_token == "after-race"

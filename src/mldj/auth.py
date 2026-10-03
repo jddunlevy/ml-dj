@@ -190,13 +190,22 @@ def refresh_tokens(transport: Transport, clock: Clock, client_id: str, tokens: T
     )
 
 
-def login(transport: Transport, clock: Clock, client_id: str, path: Path = TOKENS_PATH) -> Tokens:
+def login(
+    transport: Transport,
+    clock: Clock,
+    client_id: str,
+    path: Path = TOKENS_PATH,
+    port: int = 8888,
+) -> Tokens:
     """Interactive one-time authorization. Opens a browser and waits on the loopback."""
     verifier = random_verifier()
     url = authorize_url(client_id, verifier)
     print("Opening Spotify authorization. If no browser opens, visit:\n" + url)
-    webbrowser.open(url)
-    code = wait_for_code()
+    # The browser is opened from on_ready, which fires once the loopback is accepting - not
+    # before wait_for_code, which would leave a window where the callback is refused. Spotify
+    # skips the consent screen on a re-authorization, so that window is wide enough to lose a
+    # redirect to ERR_CONNECTION_REFUSED, and the authorization code is spent when it happens.
+    code = wait_for_code(port=port, on_ready=lambda: webbrowser.open(url))
     tokens = exchange_code(transport, clock, client_id, code, verifier)
     save_tokens(tokens, path)
     return tokens
