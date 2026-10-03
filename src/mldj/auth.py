@@ -4,11 +4,13 @@ Two things change in the port: localStorage becomes a gitignored JSON file under
 and the browser redirect becomes a one-shot loopback HTTP server on the exact redirect
 URI Spotify has registered.
 
-Phase 0 reads what is playing. `mldj playlist` adds three scopes - the two library reads and
-playlist-modify-private - and that is the whole widening. Do not add
-user-modify-playback-state: queue writing is Phase 4, after the pitch. Widening SCOPE
-invalidates the cached token and forces the PKCE flow again, so change it between capture
-sessions, never during one.
+Phase 0 reads what is playing. `mldj playlist` adds the two library reads and
+playlist-modify-private. user-modify-playback-state came in on 2026-10-03 for `mldj queue`,
+ahead of the Phase 4 schedule and deliberately: the project's end goal is a system that
+chooses what plays next, and every other component was built before anyone confirmed the
+queue endpoint would accept a write at all. One track proves the loop can close. Widening
+SCOPE invalidates the cached token and forces the PKCE flow again, so change it between
+capture sessions, never during one.
 """
 
 import base64
@@ -29,16 +31,21 @@ from mldj.transport import Transport
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 REDIRECT_URI = "http://127.0.0.1:8888/callback"
-# Capture reads what is playing; `mldj playlist` reads the library and creates one playlist.
-# user-modify-playback-state is deliberately absent: nothing here touches playback, and the
-# narrower the token the smaller the blast radius of a bug in a tool that is one typo from
-# writing to a real account. Queue writing is Phase 4, after the pitch.
+# Capture reads what is playing; `mldj playlist` reads the library and creates one playlist;
+# `mldj queue` appends a single track to the active device.
+# user-modify-playback-state is the only scope here that can change what a listener hears, and
+# the queue is append-only - Spotify exposes no remove - so a bug writes something audible that
+# cannot be retracted. `mldj queue` therefore takes exactly one URI and queues exactly one
+# track. Nothing in this repo may queue in a loop until Phase 4 settles the queue-depth
+# question.
 SCOPE = " ".join(
     (
         "user-read-currently-playing",  # capture
         "playlist-modify-private",  # playlist creation
         "user-library-read",  # /v1/me/tracks
         "user-top-read",  # /v1/me/top/tracks
+        "user-modify-playback-state",  # mldj queue - POST /v1/me/player/queue
+        "user-read-playback-state",  # read the queue back, and which device is active
     )
 )
 VERIFIER_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"

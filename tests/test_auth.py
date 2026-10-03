@@ -173,14 +173,26 @@ def test_the_token_carries_exactly_the_scopes_the_project_needs():
         "playlist-modify-private",
         "user-library-read",
         "user-top-read",
+        "user-modify-playback-state",
+        "user-read-playback-state",
     }
 
 
-def test_the_token_never_carries_playback_control():
-    # Nothing in this project touches playback. The narrower the token, the smaller the blast
-    # radius of a bug in a tool that is one typo from writing to a real account. Queue writing
-    # is Phase 4 and stays out until the pitch is delivered.
-    assert "user-modify-playback-state" not in SCOPE
+def test_the_token_never_carries_a_scope_that_can_destroy_listener_data():
+    """This replaces an earlier guard that kept user-modify-playback-state out entirely.
+
+    That guard's reason was blast radius, not playback as such, and on 2026-10-03 the project
+    decided a system that chooses what plays next is the point rather than a later phase. The
+    reason survives the decision: queueing a track is audible and annoying, while the scopes
+    below silently rewrite a library built over nine years. Those stay out.
+    """
+    for destructive in (
+        "user-library-modify",  # would delete saved tracks
+        "playlist-modify-public",  # would rewrite playlists other people see
+        "user-follow-modify",  # would unfollow artists
+        "ugc-image-upload",
+    ):
+        assert destructive not in SCOPE
 
 
 def test_login_binds_the_callback_server_before_opening_the_browser(tmp_path, monkeypatch):

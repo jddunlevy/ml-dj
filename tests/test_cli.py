@@ -36,3 +36,11 @@ def test_playlist_run_raises_before_any_network_call_when_export_is_missing(tmp_
     args = Namespace(session=str(missing))
     with pytest.raises(SystemExit, match="no export at"):
         _run(args)
+
+
+def test_the_queue_subcommand_is_registered():
+    from mldj.cli import build_parser
+
+    args = build_parser().parse_args(["queue", "--uri", "spotify:track:x"])
+    assert args.command == "queue"
+    assert args.uri == "spotify:track:x"

@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from mldj import candidates, capture, export, live, playlist, scrobbles, tags
+    from mldj import candidates, capture, export, live, playback, playlist, scrobbles, tags
     from mldj.measure import report
     from mldj.space import evaluate
 
@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidates.register(subparsers)
     live.register(subparsers)
     playlist.register(subparsers)
+    playback.register(subparsers)
     return parser
 
 
