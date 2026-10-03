@@ -47,11 +47,20 @@ the existing index with no new tag fetching.
 
 ### Three things the export is not
 
-1. **It is stale and does not backfill the hole.** It ends 2025-12-31; there are **zero** plays
-   inside the 64-day hole (2026-07-24 → 2026-09-26). Novelty stays an **upper bound** and the
-   two dates stay named in the report. The filenames are offset from their contents — the file
-   named `2026` holds Oct–Dec 2025 — so a file covering 2026 may exist and may not have been
-   downloaded. Worth one check; nothing here depends on it.
+1. **It is 272 days stale and does not backfill the hole.** It ends 2025-12-31; Last.fm runs to
+   2026-09-29. The 64-day hole (2026-07-24 → 2026-09-26) opens seven months *after* the export
+   ends, so there are **zero** export plays inside it. Novelty stays an **upper bound** and the
+   two dates stay named in the report.
+
+   The two corpora are **complementary and neither subsumes the other**: the export adds
+   2017-05-01 → 2021-09-05 (11,895 plays, 1,509 distinct tracks) that Last.fm never saw, and
+   Last.fm adds the final 272 days that the export never saw. Consequence for this work: **the
+   eval corpus ends 272 days before the demo session.** That is acceptable for validating a
+   scoring function and it is stated rather than glossed — different windows, and taste drifts.
+
+   The filenames are offset from their contents — the file named `2026` holds Oct–Dec 2025 — so a
+   file covering 2026 may exist and may not have been downloaded. Worth one check; nothing here
+   depends on it.
 2. **It does not flag the AI DJ.** Predicted, now confirmed: there is no playback-context field.
    Novelty, persistence and repetition are claims about *what the DJ chose*, so **capture stays
    necessary** and Phase 0 is not retired by this.
@@ -155,6 +164,20 @@ Significance by permutation test over run labels, matching Phase 0's existing me
 2. **`scored` and `missing` print next to every number.** 2,992 export tracks (38%) carry no
    tags and are unscorable. CLAUDE.md's existing rule — a higher score on a smaller scorable
    subset is not an improvement — applies to this table in full.
+
+   **And the missingness is not random: it is caused by skipping.** Only 944 of those 2,992
+   tracks predate Last.fm. The other 2,048 were played in the Last.fm era and still have no tags,
+   because Last.fm only scrobbles past ~half a track — a track you always skip never scrobbles,
+   so it never enters the tag corpus. Over Last.fm-era export plays the skip rate is **36.7% on
+   untagged tracks against 18.1% on tagged ones**, and **95.5% of untagged tracks were never
+   completed even once** against 16.6% of tagged ones.
+
+   So the unscorable set is enriched for exactly the skips this eval cares about. **The direction
+   is safe:** the dropped tracks are the *easiest* skips to predict, so removing them lowers AUC
+   and every measured AUC is a **lower bound** on the engine's discrimination. This is reported in
+   the same breath as the AUC, with these numbers, the way the novelty upper bound is reported.
+   It must not be "fixed" by quietly back-filling artist-tier tags for untagged tracks: that
+   would trade an honest lower bound for an unknown.
 3. **Decay and `w` are swept, and the sweep prints coverage per row.** A configuration that
    wins by scoring fewer pairs has not won.
 

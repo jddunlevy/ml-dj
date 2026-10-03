@@ -55,6 +55,20 @@ If you are about to `git add` something under `data/`, stop.
 **Phase 3 — the vector prototype, in R Shiny.** Spec written and approved:
 `docs/superpowers/specs/2026-09-29-vector-prototype-design.md`. Plan not yet written.
 
+**The offline evaluation is a bounded addition to Phase 3, not a new phase.** Spec written and
+approved 2026-10-02: `docs/superpowers/specs/2026-10-02-offline-evaluation-design.md`. Plan not
+yet written — that is the next step. The Spotify export arrived and turns the adaptation claim
+from *demonstrated* into *measured*: 10,114 labeled skips replay through the existing engine, and
+the result is an AUC ablation — **responsive** (the engine as built) against **inert** (skips
+downgraded to `unknown`). `AUC(responsive) > AUC(inert)` is the measured form of the thesis,
+because both arms share the space, the decay and the completions and differ only in whether a
+skip does anything. A tie means the skip arithmetic earns nothing on real data, and the pitch
+would have to say so — which is the reason to run it.
+
+It is scoped to one adapter (`streaming_history.py` emits the existing `Play` shape) plus a
+measurement module, precisely so 59 MB of new data cannot absorb the days the demo needs. **The
+demo existing and landing is still the deliverable at risk; this does not outrank it.**
+
 **Phase 2 is deliberately deferred behind it.** The normal order is 2 then 3, and this inverts it
 for one reason: the deliverable most at risk is the demo existing and landing, and Phase 2 is the
 one phase whose premise died. The prototype does not need antonymy to work — a skip subtracts the
@@ -109,6 +123,13 @@ the only probe with room to move and it is starved — 2 of 8 post-skip and 0 of
 transitions had tags on both sides, so its reported `tag_delta` is arithmetic over an empty set.
 Full numbers, the permutation test, and the proposed (not implemented) widening of the tag
 measurement are in the plan's **Findings — 2026-09-30** section.
+
+**The starvation is relieved, but in a different corpus — do not conflate the two.** The Spotify
+export yields **7,290** skip→next pairs with tags on both sides against these 2. It does not
+repair this metric, because the export cannot tell which plays came from the DJ: the capture log
+measures *the DJ's* behavior and the export measures *yours*. The export answers "does the engine
+score what this listener accepts", which is the Phase 3 question. It cannot answer "does the DJ
+adapt", which is the Phase 0 question. Two corpora, two claims, and beat 6 keeps them apart.
 Plan: `docs/superpowers/plans/2026-09-28-phase-0-baseline.md`
 
 ## Architecture
@@ -182,24 +203,43 @@ Rscript -e "shiny::runApp('.')"
   space is the Last.fm tag graph. It is a design input, not a workaround.
 - **Last.fm does not record skips.** Scrobbles fire after ~half a track or four minutes, so a skip
   is an absence. No skip data exists *in Last.fm*, historically or otherwise — it only exists live,
-  from capture. **But see the next bullet: the spec reasons only from Last.fm, and Spotify's own
-  export is a different source that nobody had checked.**
-- **Spotify's data export may carry historical skips — verify, do not assume either way.** The
-  Extended Streaming History export (account.spotify.com/privacy) records per-play `ms_played`,
-  `reason_start` and `reason_end`, and `reason_end: "fwdbtn"` means the next button was pressed:
-  a skip, with timing. If that holds it is a large offline-evaluation corpus for Phase 3. Two
-  caveats before relying on it: the exact field set must be confirmed against a real export, and
-  **the export probably does not flag which plays came from the AI DJ**. Novelty, persistence and
-  repetition are all claims about *what the DJ chose*, so **capture stays necessary** regardless of
-  what the export contains — and see "do not plan around the export arriving" below on timing.
+  from capture, **or from the Spotify export: see the next bullet. The parent spec reasons only
+  from Last.fm and its "no historical skip data exists" conclusion is now wrong.** The scrobble
+  threshold has a second consequence that is easy to miss — it silently removes always-skipped
+  tracks from the corpus entirely. See "the tag gap is CAUSED by skipping" below.
+- **The Spotify export DOES carry historical skips. Arrived 2026-10-02; field set confirmed.**
+  It lives in `data/spotify-export/` (gitignored — every record carries `ip_addr`). Per play:
+  `ts`, `ms_played`, `reason_start`, `reason_end`, `shuffle`, `skipped`, `spotify_track_uri`,
+  track/artist/album names, `platform`, `conn_country`, `offline`, `incognito_mode`, `ip_addr`.
+  **`skipped` is an explicit boolean the spec did not anticipate.** 63,785 plays carry a track
+  URI: 36,314 `trackdone`, and **10,114 clean skips** where `reason_end == "fwdbtn"` *and*
+  `skipped` — median `ms_played` 5.9 s, p10 1.2 s. **7,290 skip→next-track pairs have tags on
+  both sides**, against Phase 0's 2.
+  - **The two fields disagree on 8,249 plays** (2,194 `fwdbtn` but not `skipped`; 6,055 `skipped`
+    but ended `endplay`). The strict intersection is the rule, and every disagreement resolves to
+    `unknown`, never to `skipped` — same reasoning as `skips.py`, since an inflated skip rate
+    flatters this project's own argument.
+  - **It does not flag which plays came from the AI DJ** — predicted, now confirmed. There is no
+    playback-context field. Novelty, persistence and repetition are claims about *what the DJ
+    chose*, so **capture stays necessary** and Phase 0 is not retired by this.
+  - **It carries no counterfactual.** It contains only tracks Spotify played, so it can validate
+    the engine's *scoring* but never its *candidate selection*. Say that in beat 6.
+  - Design: `docs/superpowers/specs/2026-10-02-offline-evaluation-design.md`.
 - **Poll granularity matters.** `cd-player` polls at 5000 ms, which collapses fast skips and
   multi-skip bursts. Phase 0 polls faster and the chosen value must be justified by measurement,
   traded against rate limits.
-- **History depth is settled, and counted:** 39,159 all-time scrobbles over **5,844 distinct
-  tracks**, spanning 2021-09-05 to now (re-measured 2026-09-29). The corpus is deep rather than
-  broad, about 6.7 plays per track. That retires spec open question 4 in full: Phase 1 measured the
-  tagging too — **98.2% of tracks carry a vector**, at tiers `{track: 1360, album: 813, artist:
-  3563, none: 108}`. Those are beat 6 numbers.
+- **History depth is settled, and counted — but say which source.** Two now exist:
+
+  | | plays | distinct tracks | span |
+  | --- | --- | --- | --- |
+  | Last.fm scrobbles | 39,159 | 5,844 | 2021-09-05 → 2026-09-29 |
+  | Spotify export | 63,785 | 8,497 | 2017-05-01 → 2025-12-31 |
+
+  Last.fm is deep rather than broad, about 6.7 plays per track, and it remains **the tag corpus**:
+  the space and every tag vector are built from it, and 61.9% of export tracks join to it by
+  `match.track_key`. That retires spec open question 4 in full: Phase 1 measured the tagging too —
+  **98.2% of Last.fm tracks carry a vector**, at tiers `{track: 1360, album: 813, artist: 3563,
+  none: 108}`. Those are beat 6 numbers. Do not quote the export's 8,497 as a tagged-track count.
 - **The scrobble hole affects novelty and nothing else — do not let it drive priorities.** A
   64-day hole, 2026-07-24 to 2026-09-26; scrobbling is reconnected and `mldj ingest` reports
   `gap_days = 0` (2026-09-29). It is bounded, so its cost is finite. It touches exactly one metric,
@@ -217,10 +257,39 @@ Rscript -e "shiny::runApp('.')"
     and move on. `IngestSummary.stale` (threshold 2 days) catches a *new* stoppage, which would be a
     real problem because it would corrupt the capture window itself — re-run `mldj ingest` before
     generating the report.
-- **Do not plan around the Spotify export arriving.** It was requested 2026-09-29 and extended
-  history can take 30 days, so it may well miss the demo. Nothing on the critical path may depend on
-  it. If it lands in time it backfills the hole and upgrades novelty from upper bound to measured,
-  and it is a Phase 3 offline-evaluation corpus — both are bonuses, neither is a plan.
+  - **The Spotify export cannot repair it** — the export stops 2025-12-31, seven months before the
+    hole opens. Do not go looking for a fix there; see the staleness bullet below.
+- **The export is 272 days stale, and it does NOT backfill the scrobble hole.** It ends
+  **2025-12-31**; Last.fm runs to 2026-09-29. The 64-day hole is 2026-07-24 → 2026-09-26, which is
+  seven months *past the end of the export* — there are **zero** export plays inside it. An
+  earlier version of this file said the export would backfill the hole and upgrade novelty from
+  upper bound to measured. **That was wrong and is now retracted: novelty stays an upper bound,
+  permanently as far as this deliverable is concerned.**
+  - **The two corpora are complementary, neither subsumes the other.** The export adds
+    2017-05-01 → 2021-09-05, which Last.fm never saw: 11,895 plays over 1,509 distinct tracks.
+    Last.fm adds the final 272 days, which the export never saw. Any claim about "all-time"
+    listening must name which source it came from.
+  - **The offline eval therefore ends 272 days before the demo.** Acceptable for validating a
+    scoring function, and it must be said rather than glossed: the eval corpus and the demo
+    session are different windows, and taste drifts.
+  - The filenames are offset from their contents — the file named `2026` holds Oct–Dec 2025 — so
+    **a file covering 2026 may exist and may not have been downloaded.** Worth one look in the
+    download folder. Nothing on the critical path depends on it.
+- **The tag gap is CAUSED by skipping, and it biases the eval — conservatively.** 2,992 export
+  tracks carry no tags, and only 944 of those are explained by predating Last.fm. The other 2,048
+  were played in the Last.fm era and still have no tags, because **Last.fm only scrobbles past
+  ~half a track: a track you always skip never scrobbles, so it never enters the corpus, so it
+  has no vector.** The mechanism is visible in the rates — over Last.fm-era export plays, skip
+  rate is **36.7% on untagged tracks against 18.1% on tagged ones**, and **95.5% of untagged
+  tracks were never completed even once** (16.6% of tagged ones).
+  - So the unscorable set is *not* missing at random; it is enriched for exactly the skips the
+    eval cares about. **The direction is safe:** dropping never-completed tracks removes the
+    easiest skips to predict, which lowers AUC, so any measured AUC is a **lower bound** on the
+    engine's discrimination. Same safe direction as the novelty upper bound — report it the same
+    way, once, with the numbers named.
+  - Do not "fix" this by back-filling tags for untagged tracks from the artist tier alone without
+    saying so. The missingness is informative, and hiding it would convert a lower bound into an
+    unknown.
 - **Synonyms co-occur LESS than related pairs in this corpus — the spec's premise is inverted.**
   Mean jaccard: synonym 0.103, related 0.259. Tagging is *choosing* a label, not enumerating
   equivalents, so nobody tags a track both `hip-hop` and `rap`. Level 1 therefore fails in all 72
