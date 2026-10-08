@@ -4,6 +4,12 @@
 SESSION_PATH <- Sys.getenv("MLDJ_SESSION", "fixtures/session-synthetic.json")
 CANDS_PATH   <- Sys.getenv("MLDJ_CANDIDATES", "fixtures/candidates-synthetic.json")
 
+# What `mldj next` actually wrote to Spotify's queue. Shown verbatim rather than recomputed:
+# the queue is written from the library pool (the only pool carrying Spotify URIs) and
+# "what i'd play next" ranks the Last.fm candidate pool, so they can disagree. Displaying the
+# write is what stops the screen contradicting the queue.
+QUEUED_PATH  <- Sys.getenv("MLDJ_QUEUED", "data/live/queued.json")
+
 # Live mode re-reads the two JSON files as `mldj live` rewrites them. R still never polls
 # Spotify and still never decides an outcome - `skips.derive_plays` owns that, and a second
 # implementation in another language is a second thing to be wrong. Shiny only notices the
@@ -58,7 +64,9 @@ ui <- shiny::fluidPage(
       shiny::p(class = "lab", "reading"),
       shiny::plotOutput("reading", height = "100%"),
       shiny::p(class = "lab", style = "margin-top:14px", "what i'd play next"),
-      shiny::uiOutput("candidates")
+      shiny::uiOutput("candidates"),
+      shiny::p(class = "lab", style = "margin-top:14px", "queued on spotify"),
+      shiny::uiOutput("queued")
     )
   ),
   shiny::div(
@@ -79,6 +87,18 @@ server <- function(input, output, session) {
   # good value and try again on the next tick.
   replay_rv <- shiny::reactiveVal(replay)
   cands_rv <- shiny::reactiveVal(candidates)
+  queued_rv <- shiny::reactiveVal(read_queued(QUEUED_PATH))
+
+  # Polled outside LIVE too: the queue write is a live act whichever source the session came
+  # from, and a demo that replays a session can still queue against the real account.
+  queued_raw <- shiny::reactiveFileReader(
+    1500, session, QUEUED_PATH,
+    function(path) tryCatch(read_queued(path), error = function(e) NULL)
+  )
+  shiny::observe({
+    q <- queued_raw()
+    if (!is.null(q)) queued_rv(q)
+  })
 
   if (LIVE) {
     tolerant <- function(reader) function(path) tryCatch(reader(path), error = function(e) NULL)
@@ -193,6 +213,28 @@ server <- function(input, output, session) {
         cand_row(hit$rank, hit$title, hit$artist, hit$score, TRUE)))
     }
     shiny::tagList(rows)
+  })
+
+  # The write, reported rather than recomputed. Nothing here ranks anything: if this panel
+  # disagreed with Spotify's own queue it would be the exact failure this project diagnoses -
+  # a display claiming more than the system did.
+  output$queued <- shiny::renderUI({
+    q <- queued_rv()
+    if (is.null(q)) {
+      return(shiny::div(class = "cand-row",
+                        shiny::span(""),
+                        shiny::span(style = "color:var(--muted)", "nothing queued yet"),
+                        shiny::span("")))
+    }
+    shiny::tagList(
+      shiny::div(class = "cand-row hit",
+                 shiny::span(q$rank),
+                 shiny::span(paste(q$title, "—", q$artist)),
+                 shiny::span(sprintf("%.2f", q$score))),
+      shiny::div(style = "font-size:9px;color:var(--muted);margin-top:3px",
+                 sprintf("written to spotify · rank %s of %s eligible%s",
+                         q$rank, q$pool_size, if (isTRUE(q$novel)) " · novel" else ""))
+    )
   })
 }
 

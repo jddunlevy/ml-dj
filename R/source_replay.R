@@ -25,3 +25,27 @@ read_session <- function(path) {
   })
   raw
 }
+
+#' The track `mldj next` actually queued on Spotify, or NULL if nothing has been.
+#'
+#' Deliberately NULL rather than an error on a missing file: until the first queue write of a
+#' session there is legitimately nothing to show, which is a state the app renders rather than
+#' a fault. A truncated read is also NULL - `mldj next` rewrites the file in place and the
+#' app's file reader polls on a timer, so landing mid-write is expected, not exceptional.
+#'
+#' The app shows THIS rather than re-ranking on its own, so that what is on screen is the
+#' track that reached the wire. The queue is written from the library pool - the only pool
+#' whose rows carry a Spotify URI - while "what i'd play next" ranks the Last.fm candidate
+#' pool, so the two can legitimately disagree. Reporting the write is what keeps the screen
+#' from contradicting the queue in front of a room.
+
+read_queued <- function(path) {
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+  q <- tryCatch(jsonlite::fromJSON(path, simplifyVector = TRUE), error = function(e) NULL)
+  if (!is.list(q) || is.null(q$uri) || !nzchar(as.character(q$uri))) {
+    return(NULL)
+  }
+  q
+}
