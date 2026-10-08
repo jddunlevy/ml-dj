@@ -1,6 +1,15 @@
 #' The two plots. Data in, ggplot out - nothing here reads a file or a reactive.
 
 THEMES <- list(
+  # Lifted token-for-token from the pitch mockup (homework/individual-pitch-prototype.html)
+  # so the live app and the submitted deck read as one artifact: --bg, --panel, --ink, --mid
+  # and the Spotify green --green. First in the list, so it is what the app opens on.
+  #
+  # It is the only dark theme here, and dark grounds can wash out under a lit classroom
+  # projector in a way they never do on a laptop. `notebook` is one dropdown away and is the
+  # fallback if the room's projector is poor - check it in the room before relying on this.
+  mockup         = list(bg = "#0a0c0b", surface = "#141816", text = "#eef0ec",
+                        muted = "#949c96", accent = "#1ed760"),
   notebook       = list(bg = "#f5f1e8", surface = "#ffffff", text = "#1a1a1a",
                         muted = "#666666", accent = "#000000"),
   avocado        = list(bg = "#d4e3c0", surface = "#e8efd9", text = "#2d3a1f",

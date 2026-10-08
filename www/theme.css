@@ -1,6 +1,18 @@
-:root, [data-theme="notebook"] {
-  --bg:#f5f1e8; --surface:#fff; --text:#1a1a1a; --muted:#666; --accent:#000;
+/* The base IS the default theme, which must stay in step with names(THEMES)[1] in
+   R/plots.R. The theme switch is a JS custom message that sets data-theme on <html>, and it
+   does not land before the first paint - so whatever :root holds is what the app opens on.
+   While every theme was light that was invisible; the moment one was dark it showed up as a
+   dark plot panel inside light page chrome. Keeping the base and the R default identical
+   means the opening frame is correct without depending on JS timing at all.
+
+   Token-for-token from the pitch mockup (homework/individual-pitch-prototype.html), so the
+   live app and the submitted deck read as one artifact. The only dark theme here: see the
+   projector note in R/plots.R. */
+:root, [data-theme="mockup"] {
+  --bg:#0a0c0b; --surface:#141816; --text:#eef0ec; --muted:#949c96; --accent:#1ed760;
 }
+[data-theme="notebook"]     { --bg:#f5f1e8; --surface:#fff; --text:#1a1a1a;
+                              --muted:#666; --accent:#000; }
 [data-theme="avocado"]      { --bg:#d4e3c0; --surface:#e8efd9; --text:#2d3a1f;
                               --muted:#5a6b46; --accent:#3d5a2a; }
 [data-theme="sakura"]       { --bg:#fce4ec; --surface:#fdeef3; --text:#3a1f2e;

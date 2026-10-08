@@ -31,9 +31,17 @@ all_states <- function(events, decay, w) {
 
 ui <- shiny::fluidPage(
   shiny::tags$head(shiny::tags$link(rel = "stylesheet", href = "theme.css")),
+  # The theme switch is client-side on purpose. It used to be a server custom message, and
+  # that message did not land: the plots, rendered in R, followed the dropdown while the page
+  # chrome, driven by CSS variables, stayed on whatever :root held. The split was invisible
+  # while every theme was light and obvious the moment one was dark. There is no reason for
+  # this to cross the wire at all - the select already knows its own value.
   shiny::tags$script(shiny::HTML(
-    "Shiny.addCustomMessageHandler('theme', function(t){
-       document.documentElement.setAttribute('data-theme', t); });"
+    "document.addEventListener('shiny:inputchanged', function(e){
+       if (e.name === 'theme' && e.value) {
+         document.documentElement.setAttribute('data-theme', e.value);
+       }
+     });"
   )),
   shiny::div(
     class = "hd",
@@ -80,7 +88,7 @@ ui <- shiny::fluidPage(
 )
 
 server <- function(input, output, session) {
-  th <- shiny::reactive(THEMES[[input$theme %||% "notebook"]])
+  th <- shiny::reactive(THEMES[[input$theme %||% names(THEMES)[1]]])
 
   # `mldj live` rewrites these files in place, so a poll can land mid-write and read a
   # truncated document. One bad read must not take down a running session: keep the last
