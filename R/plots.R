@@ -1,25 +1,22 @@
 #' The two plots. Data in, ggplot out - nothing here reads a file or a reactive.
 
-THEMES <- list(
-  # Lifted token-for-token from the pitch mockup (homework/individual-pitch-prototype.html)
-  # so the live app and the submitted deck read as one artifact: --bg, --panel, --ink, --mid
-  # and the Spotify green --green. First in the list, so it is what the app opens on.
-  #
-  # It is the only dark theme here, and dark grounds can wash out under a lit classroom
-  # projector in a way they never do on a laptop. `notebook` is one dropdown away and is the
-  # fallback if the room's projector is poor - check it in the room before relying on this.
-  mockup         = list(bg = "#0a0c0b", surface = "#141816", text = "#eef0ec",
-                        muted = "#949c96", accent = "#1ed760"),
-  notebook       = list(bg = "#f5f1e8", surface = "#ffffff", text = "#1a1a1a",
-                        muted = "#666666", accent = "#000000"),
-  avocado        = list(bg = "#d4e3c0", surface = "#e8efd9", text = "#2d3a1f",
-                        muted = "#5a6b46", accent = "#3d5a2a"),
-  sakura         = list(bg = "#fce4ec", surface = "#fdeef3", text = "#3a1f2e",
-                        muted = "#7a4a60", accent = "#d9869f"),
-  `blood-orange` = list(bg = "#ffb380", surface = "#ffd9b3", text = "#2a0f00",
-                        muted = "#8a3a1a", accent = "#c91540"),
-  `blue-bird`    = list(bg = "#bcd4e6", surface = "#d4e2ee", text = "#3a2820",
-                        muted = "#7a5a48", accent = "#6e4030")
+# One theme, lifted token-for-token from the pitch mockup
+# (homework/individual-pitch-prototype.html), so the live app and the submitted deck read as
+# one artifact. The five light themes and the selector that chose between them are gone.
+#
+# That removal is what lets `skip` and `now` be fixed colours. The old note in theme.css was
+# right that a hardcoded highlight could not survive both a cream ground and a blood-orange
+# one - with a single dark ground that constraint does not exist, and a skip marker that must
+# carry across a lit room is worth more than portability to themes nobody is going to use.
+#
+# `skip` is brighter than the mockup's own --red (#a35c5c), which is desaturated for body
+# text on a page rather than for a 3.6pt glyph read from the back of a classroom.
+# These must stay in step with :root in www/theme.css, which paints the page chrome.
+THEME <- list(
+  bg = "#0a0c0b", surface = "#141816", text = "#eef0ec",
+  muted = "#949c96", accent = "#1ed760",
+  skip = "#ff5c5c",  # the x markers - a skip is the one event the pitch is about
+  now = "#22d3ee"    # the live position, cyan so it never reads as another skip or trail dot
 )
 
 MONO <- "mono"
@@ -63,8 +60,10 @@ reading_data <- function(space, v, n_toward = 6, n_away = 3) {
 }
 
 #' Sign is carried by value, not hue: with one accent token there is no diverging scale
-#' available, and this survives greyscale, all five themes, and a projector.
-plot_reading <- function(reading_df, th = THEMES$notebook) {
+#' available, and this survives greyscale and a projector. Deliberately NOT recoloured to the
+#' new `skip` token - these bars are terms the vector points away from, which is the lasting
+#' effect of past skips, not the skip events themselves. The x markers are the skips.
+plot_reading <- function(reading_df, th = THEME) {
   d <- reading_df
   # factor() rejects duplicate levels ("duplicated levels are not allowed"), so two term keys
   # that share a display string would crash the plot. Order/position by a de-duplicated key, but
@@ -187,7 +186,7 @@ trail_data <- function(space, layout_df, states) {
 
 #' The constellation. Motion lives here; truth lives in the reading. The subtitle says so,
 #' because a 150-to-2 projection discards 148 dimensions and the audience cannot see that.
-plot_constellation <- function(layout_df, trail_df, th = THEMES$notebook) {
+plot_constellation <- function(layout_df, trail_df, th = THEME) {
   lab <- layout_df[layout_df$label, ]
   n <- nrow(trail_df)
   trail_df$alpha <- if (n > 1) seq(.3, 1, length.out = n) else 1
@@ -208,12 +207,12 @@ plot_constellation <- function(layout_df, trail_df, th = THEMES$notebook) {
                        linewidth = .45, alpha = .4) +
     ggplot2::geom_point(data = trail_df, ggplot2::aes(x, y, alpha = alpha),
                         colour = th$accent, size = 1.9) +
-    ggplot2::geom_point(data = skips, ggplot2::aes(x, y), shape = 4, colour = th$accent,
+    ggplot2::geom_point(data = skips, ggplot2::aes(x, y), shape = 4, colour = th$skip,
                         size = 3.6, stroke = 1.15) +
     ggplot2::geom_point(data = cur, ggplot2::aes(x, y), colour = th$accent, size = 4.2) +
     ggplot2::geom_point(data = cur, ggplot2::aes(x, y), colour = th$surface, size = 1.5) +
     ggplot2::geom_text(data = cur, ggplot2::aes(x, y, label = "now"), family = MONO,
-                       size = 2.8, colour = th$accent, hjust = -0.45, fontface = "bold") +
+                       size = 2.8, colour = th$now, hjust = -0.45, fontface = "bold") +
     ggplot2::scale_alpha_identity() +
     ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = .12)) +
     ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = .09)) +

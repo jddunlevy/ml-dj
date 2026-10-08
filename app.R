@@ -31,18 +31,6 @@ all_states <- function(events, decay, w) {
 
 ui <- shiny::fluidPage(
   shiny::tags$head(shiny::tags$link(rel = "stylesheet", href = "theme.css")),
-  # The theme switch is client-side on purpose. It used to be a server custom message, and
-  # that message did not land: the plots, rendered in R, followed the dropdown while the page
-  # chrome, driven by CSS variables, stayed on whatever :root held. The split was invisible
-  # while every theme was light and obvious the moment one was dark. There is no reason for
-  # this to cross the wire at all - the select already knows its own value.
-  shiny::tags$script(shiny::HTML(
-    "document.addEventListener('shiny:inputchanged', function(e){
-       if (e.name === 'theme' && e.value) {
-         document.documentElement.setAttribute('data-theme', e.value);
-       }
-     });"
-  )),
   shiny::div(
     class = "hd",
     shiny::div(shiny::span(class = "logo", "ml-dj"),
@@ -53,8 +41,7 @@ ui <- shiny::fluidPage(
       shiny::numericInput("decay", "decay", 0.85, min = 0, max = 1, step = .05, width = "90px"),
       shiny::numericInput("w", "w", 1, min = 0, max = 5, step = .25, width = "70px"),
       shiny::numericInput("eps", "ε", 0, min = 0, max = 1, step = .05, width = "70px"),
-      if (LIVE) shiny::checkboxInput("follow", "follow", value = TRUE, width = "80px"),
-      shiny::selectInput("theme", NULL, choices = names(THEMES), width = "150px")
+      if (LIVE) shiny::checkboxInput("follow", "follow", value = TRUE, width = "80px")
     )
   ),
   shiny::fluidRow(
@@ -88,7 +75,9 @@ ui <- shiny::fluidPage(
 )
 
 server <- function(input, output, session) {
-  th <- shiny::reactive(THEMES[[input$theme %||% names(THEMES)[1]]])
+  # One theme now, so this is constant. Kept as a reactive rather than inlined so that every
+  # `th()` call site in the render functions stays exactly as it was.
+  th <- shiny::reactive(THEME)
 
   # `mldj live` rewrites these files in place, so a poll can land mid-write and read a
   # truncated document. One bad read must not take down a running session: keep the last
@@ -142,10 +131,6 @@ server <- function(input, output, session) {
   # Guards the window between the slider's max growing and the browser echoing the new
   # value back: for one tick input$step can still exceed the event count.
   step <- shiny::reactive(max(1, min(input$step %||% 1, n_events())))
-  shiny::observeEvent(input$theme, {
-    session$sendCustomMessage("theme", input$theme)
-  })
-
   states <- shiny::reactive(all_states(replay_rv()$events, input$decay %||% 0.85,
                                        input$w %||% 1))
   state <- shiny::reactive(states()[[step()]])
