@@ -214,8 +214,20 @@ plot_constellation <- function(layout_df, trail_df, th = THEME) {
     ggplot2::geom_text(data = cur, ggplot2::aes(x, y, label = "now"), family = MONO,
                        size = 2.8, colour = th$now, hjust = -0.45, fontface = "bold") +
     ggplot2::scale_alpha_identity() +
-    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = .12)) +
-    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = .09)) +
+    # Equal units on both axes, gridded every 2.5. Until now the panel stretched each axis to
+    # fill its box independently, so a unit of y was drawn longer than a unit of x and the
+    # distance the vector appeared to travel depended on which direction it went. For a plot
+    # whose only job is showing how far the session moved, that is a wrong picture rather than
+    # an ugly one. coord_fixed costs some empty margin when a session is wider than it is tall;
+    # an honest aspect is worth more than a full box.
+    #
+    # Both axes get the same expansion now, because with equal scales an asymmetric one
+    # reintroduces exactly the distortion coord_fixed is here to remove.
+    ggplot2::scale_x_continuous(breaks = scales::breaks_width(2.5),
+                                expand = ggplot2::expansion(mult = .12)) +
+    ggplot2::scale_y_continuous(breaks = scales::breaks_width(2.5),
+                                expand = ggplot2::expansion(mult = .12)) +
+    ggplot2::coord_fixed(ratio = 1) +
     ggplot2::labs(title = "Session vector in tag space",
                   subtitle = paste("2-D of 150 · read the bars for what it means",
                                    "· × = skip")) +

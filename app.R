@@ -180,13 +180,17 @@ server <- function(input, output, session) {
   # res, not point sizes: the plot functions size type in points, so a panel that grows
   # with the window leaves the labels the same pixel height and they read as tiny on a
   # large monitor. Raising the device resolution scales every mark together.
+  # bg is the DEVICE background, which is not the same thing as theme plot.background and
+  # defaults to white. It never showed before because the plot filled the device edge to edge.
+  # coord_fixed sets respect=TRUE on the gtable, so the plot no longer fills it, and the
+  # leftover letterbox was painting white bars above and below the constellation.
   output$constellation <- shiny::renderPlot({
     plot_constellation(layout_df,
                        trail_data(space, layout_df, states()[seq_len(step())]), th())
-  }, res = 104)
+  }, res = 104, bg = THEME$bg)
 
   output$reading <- shiny::renderPlot(plot_reading(reading_data(space, state()$v), th()),
-                                      res = 104)
+                                      res = 104, bg = THEME$bg)
 
   output$candidates <- shiny::renderUI({
     r <- rank_candidates(space, state()$v, cands_rv(), actual = nxt(),
