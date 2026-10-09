@@ -77,3 +77,15 @@ input[type="checkbox"] { accent-color: var(--accent); }
   background: var(--accent); color: var(--bg);
 }
 .irs-grid-text, .irs--shiny .irs-grid-text { color: var(--muted); }
+
+/* The queue button. Action and result sit together so nothing on stage has to look in two
+   directions. Outline rather than filled: it is next to the highlighted queued row, and two
+   solid accent blocks side by side made it unclear which one was the result. */
+.qrow { display:flex; align-items:center; justify-content:space-between;
+        gap:10px; margin:14px 0 8px; }
+.qbtn, .qbtn:hover, .qbtn:focus, .qbtn:active {
+  background:transparent; color:var(--accent); border:1px solid var(--accent);
+  border-radius:3px; padding:3px 11px; font-size:10px; letter-spacing:.12em;
+  text-transform:uppercase; font-family:inherit; box-shadow:none; outline:none;
+}
+.qbtn:hover { background:var(--accent); color:var(--bg); }

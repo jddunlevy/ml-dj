@@ -60,8 +60,15 @@ ui <- shiny::fluidPage(
       shiny::plotOutput("reading", height = "100%"),
       shiny::p(class = "lab", style = "margin-top:14px", "what i'd play next"),
       shiny::uiOutput("candidates"),
-      shiny::p(class = "lab", style = "margin-top:14px", "queued on spotify"),
-      shiny::uiOutput("queued")
+      # Action and result in one place: the button writes, and the panel directly under it is
+      # what was written. Nothing on stage has to look in two directions.
+      shiny::div(
+        class = "qrow",
+        shiny::p(class = "lab", style = "margin:0", "queued on spotify"),
+        shiny::actionButton("queue", "queue next", class = "qbtn")
+      ),
+      shiny::uiOutput("queued"),
+      shiny::uiOutput("queue_status")
     )
   ),
   shiny::div(
@@ -206,6 +213,30 @@ server <- function(input, output, session) {
         cand_row(hit$rank, hit$title, hit$artist, hit$score, TRUE)))
     }
     shiny::tagList(rows)
+  })
+
+  # The button runs `mldj next` as a subprocess - R never reaches the wire. It takes about
+  # 5.5s, almost all of it re-reading the scrobble corpus to rebuild the tag index, and Shiny
+  # is single-threaded, so the app is frozen for that whole time. withProgress is therefore
+  # not decoration: without it the demo looks hung at the exact moment the room is watching.
+  queue_out <- shiny::reactiveVal(NULL)
+  shiny::observeEvent(input$queue, {
+    shiny::withProgress(message = "ranking the library against the session vector", value = .4, {
+      queue_out(trigger_queue())
+    })
+  })
+
+  # Shown verbatim. "declined: nothing clears min-score" is as much a result as a queued URI,
+  # and paraphrasing it would be this project making a claim its own engine did not.
+  output$queue_status <- shiny::renderUI({
+    out <- queue_out()
+    if (is.null(out)) return(NULL)
+    msg <- queue_summary(out)
+    shiny::div(
+      style = paste("font-size:9.5px;margin-top:6px;color:",
+                    if (grepl("^queued", msg)) "var(--accent)" else "var(--skip)"),
+      msg
+    )
   })
 
   # The write, reported rather than recomputed. Nothing here ranks anything: if this panel
