@@ -89,3 +89,35 @@ input[type="checkbox"] { accent-color: var(--accent); }
   text-transform:uppercase; font-family:inherit; box-shadow:none; outline:none;
 }
 .qbtn:hover { background:var(--accent); color:var(--bg); }
+
+/* The follow toggle. It governs whether the view is pinned to the track playing now, which is
+   the most consequential control on a live screen, and as a stock checkbox it was a grey 10px
+   label fourth in a row of numeric inputs - missed entirely on first run. Given the same
+   outlined-pill treatment as the queue button so the two read as the controls and the numeric
+   inputs read as parameters.
+
+   The live dot is the state: --now while following, --muted when scrubbed off. It animates,
+   because a static dot next to the word "live" is exactly the kind of unearned claim this
+   project is a critique of - it pulses only while the view really is tracking the queue. */
+.followbox { margin-left:4px; }
+.followbox .form-group, .followbox .checkbox { margin:0; }
+.followbox .checkbox label {
+  display:flex; align-items:center; gap:7px;
+  color:var(--accent); border:1px solid var(--accent); border-radius:3px;
+  padding:4px 11px 4px 9px; font-size:10px; letter-spacing:.12em;
+  text-transform:uppercase; cursor:pointer; white-space:nowrap; user-select:none;
+}
+.followbox .checkbox label:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }
+.followbox input[type="checkbox"] { margin:0; width:12px; height:12px; flex:0 0 auto; }
+.followbox .checkbox label::after {
+  content:""; width:6px; height:6px; border-radius:50%;
+  background:var(--muted); flex:0 0 auto;
+}
+.followbox .checkbox label:has(input:checked) { border-color:var(--now); color:var(--now); }
+.followbox .checkbox label:has(input:checked)::after {
+  background:var(--now); animation:followpulse 1.6s ease-in-out infinite;
+}
+@keyframes followpulse {
+  0%, 100% { opacity:1;  box-shadow:0 0 0 0 color-mix(in srgb, var(--now) 70%, transparent); }
+  50%      { opacity:.55; box-shadow:0 0 0 4px color-mix(in srgb, var(--now) 0%, transparent); }
+}

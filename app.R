@@ -22,6 +22,23 @@ candidates <- read_candidates(CANDS_PATH)
 layout_df <- space_layout(space)
 N_EVENTS <- length(replay$events)
 
+# Where the scrubber opens, which differs by mode because "the interesting frame" does.
+#
+# Live: the newest event, which is the track playing right now. `follow` pins it there on every
+# poll anyway, so setting it here only stops the first paint showing an older frame and then
+# jumping forward a second later.
+#
+# Replay: the first skip, not event 1. Event 1 is whichever track the session happened to start
+# on, and the reading there is one completed track - nothing has moved yet, so it is the least
+# interesting frame in the session. The pitch is about what a skip does. Falls back to 1 for a
+# session with no skips, and to 1 for an empty one.
+OPEN_AT <- if (LIVE) {
+  max(N_EVENTS, 1)
+} else {
+  skips <- which(vapply(replay$events, function(e) identical(e$outcome, "skipped"), logical(1)))
+  if (length(skips)) skips[1] else 1
+}
+
 # Every prefix state, recomputed only when the events, decay or w change. The scrubber is
 # then a lookup, not a fold over the whole session on every frame.
 all_states <- function(events, decay, w) {
@@ -41,7 +58,16 @@ ui <- shiny::fluidPage(
       shiny::numericInput("decay", "decay", 0.85, min = 0, max = 1, step = .05, width = "90px"),
       shiny::numericInput("w", "w", 1, min = 0, max = 5, step = .25, width = "70px"),
       shiny::numericInput("eps", "ε", 0, min = 0, max = 1, step = .05, width = "70px"),
-      if (LIVE) shiny::checkboxInput("follow", "follow", value = TRUE, width = "80px")
+      # Live-only, because there is nothing to follow in a finished session - and styled as a
+      # visible pill rather than a bare checkbox, since it was previously a grey 10px label
+      # sitting fourth in a row of numeric inputs and read as decoration. On by default: the
+      # default view of a live session is the track playing now.
+      if (LIVE) {
+        shiny::div(
+          class = "followbox",
+          shiny::checkboxInput("follow", "follow live", value = TRUE, width = "auto")
+        )
+      }
     )
   ),
   shiny::fluidRow(
@@ -73,7 +99,7 @@ ui <- shiny::fluidPage(
   ),
   shiny::div(
     class = "scrub",
-    shiny::sliderInput("step", NULL, min = 1, max = N_EVENTS, value = 1, step = 1,
+    shiny::sliderInput("step", NULL, min = 1, max = max(N_EVENTS, 1), value = OPEN_AT, step = 1,
                        width = "100%", animate = shiny::animationOptions(interval = 1400)),
     shiny::div(style = "font-size:9px;color:var(--muted);margin-top:4px",
                "* novelty is an upper bound: the scrobble history has a 64-day hole,",
@@ -140,8 +166,23 @@ server <- function(input, output, session) {
   step <- shiny::reactive(max(1, min(input$step %||% 1, n_events())))
   states <- shiny::reactive(all_states(replay_rv()$events, input$decay %||% 0.85,
                                        input$w %||% 1))
-  state <- shiny::reactive(states()[[step()]])
-  event <- shiny::reactive(replay_rv()$events[[step()]])
+  # A live session with no events yet is a real state, not a fault: `mldj live` writes
+  # session.json as soon as it starts, so the app can legitimately be open before the first
+  # track has been captured - which is what happens if you start the terminals before pressing
+  # play. `step` clamps to 1 regardless, so without this both of these index an empty list and
+  # the screen fills with a subscript-out-of-bounds error instead of waiting.
+  #
+  # req() halts every output downstream of these two silently, so the panels stay blank until
+  # the first event lands and then populate on the next poll. Nothing to dismiss, nothing to
+  # restart.
+  state <- shiny::reactive({
+    shiny::req(n_events() > 0)
+    states()[[step()]]
+  })
+  event <- shiny::reactive({
+    shiny::req(n_events() > 0)
+    replay_rv()$events[[step()]]
+  })
   nxt <- shiny::reactive({
     i <- step() + 1
     if (i > n_events()) NULL else replay_rv()$events[[i]]
