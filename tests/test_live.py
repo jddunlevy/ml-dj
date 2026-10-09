@@ -204,3 +204,44 @@ def test_target_log_raises_rather_than_silently_falling_back(tmp_path: Path) -> 
     # prevent, so a missing pin is an error.
     with pytest.raises(FileNotFoundError):
         target_log(tmp_path, tmp_path / "does-not-exist.jsonl")
+
+
+def test_refresh_can_skip_the_pool_entirely(tmp_path: Path) -> None:
+    """The pool rebuild makes Last.fm round trips and the next pass cannot start until they
+    finish, so one unfamiliar artist freezes session.json for as long as the fetch takes -
+    measured at roughly two minutes on a demo machine. Skipping it keeps the session live.
+
+    The app re-ranks whatever pool is on disk against the CURRENT vector on every render, so a
+    pool that is a few tracks out of date still produces correctly ranked rows. Staleness costs
+    candidate breadth, never correctness.
+    """
+    calls: list[object] = []
+
+    result = refresh(
+        log=tmp_path / "dj.jsonl",
+        out_dir=tmp_path / "live",
+        build_events=lambda p: [{"artist": "Brand New Artist", "title": "t"}],
+        build_pool=lambda events: calls.append(events) or [],
+        previous=None,
+        skip_pool=True,
+    )
+
+    assert result.session_written is True
+    assert result.candidates_written is False
+    assert calls == [], "build_pool must not be called at all when the pool is skipped"
+
+
+def test_skipping_the_pool_still_writes_the_session_every_time_events_change(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "live"
+    first = refresh(log=tmp_path / "dj.jsonl", out_dir=out,
+                    build_events=lambda p: [{"artist": "A", "title": "1"}],
+                    build_pool=lambda e: [], previous=None, skip_pool=True)
+    second = refresh(log=tmp_path / "dj.jsonl", out_dir=out,
+                     build_events=lambda p: [{"artist": "A", "title": "1"},
+                                             {"artist": "B", "title": "2"}],
+                     build_pool=lambda e: [], previous=first.events, skip_pool=True)
+
+    assert second.session_written is True
+    assert (out / "session.json").exists()
