@@ -73,6 +73,48 @@ def test_a_cooldown_of_zero_cools_nothing():
     assert recent_artists([event("A", "1")], 0) == set()
 
 
+def test_each_credited_artist_is_cooled_separately():
+    """Capture records the whole Spotify credit - "Stevie Nicks, Don Henley" - while the
+    library row is "Stevie Nicks". Comparing the strings whole lets a multi-artist credit walk
+    straight through artist rotation, which is how the engine came to queue the track that was
+    playing at that moment. Observed live on 2026-10-08."""
+    events = [event("Stevie Nicks, Don Henley", "Leather and Lace")]
+
+    cooled = recent_artists(events, 5)
+
+    assert "stevie nicks" in cooled
+    assert "don henley" in cooled
+    assert "stevie nicks, don henley" in cooled  # the whole credit still matches itself
+
+
+def test_an_ampersand_credit_is_split_too():
+    assert recent_artists([event("Hall & Oates", "x")], 5) >= {"hall", "oates", "hall & oates"}
+
+
+def test_a_featured_credit_is_split():
+    cooled = recent_artists([event("Gwen Stefani feat. Akon", "x")], 5)
+    assert "gwen stefani" in cooled
+    assert "akon" in cooled
+
+
+def test_splitting_does_not_invent_empty_artists():
+    assert "" not in recent_artists([event("A,, B", "x")], 5)
+
+
+def test_choose_next_will_not_queue_a_co_credited_artist_who_just_played():
+    """The whole bug, end to end: the library row names one artist, the session names two."""
+    pool = [
+        track("spotify:track:1", "Stevie Nicks", "Leather and Lace", tags=("indie",)),
+        track("spotify:track:2", "Someone Else", "Another Song", tags=("indie",)),
+    ]
+    events = [event("Stevie Nicks, Don Henley", "Leather and Lace", tags=("indie",))]
+
+    pick = choose_next(a_space(), events, pool, cooldown=5, min_score=0.0)
+
+    assert pick is not None
+    assert pick.artist == "Someone Else"
+
+
 # ---------------------------------------------------------------- choose_next
 
 

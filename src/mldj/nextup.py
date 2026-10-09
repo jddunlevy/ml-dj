@@ -23,6 +23,7 @@ the product under teardown got right.
 
 import argparse
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,15 +70,52 @@ class Delivery:
     reason: str  # queued | dry-run | duplicate
 
 
+# Capture records the credit exactly as Spotify gives it - "Stevie Nicks, Don Henley" - while
+# the library row for the same track is "Stevie Nicks". Comparing those whole strings lets a
+# multi-artist credit walk straight through artist rotation. Observed live on 2026-10-08: the
+# engine picked the track that was playing at that moment, because neither the cooldown nor
+# exclude_played could see that the two names referred to the same artist.
+#
+# Alternation is ordered, so `featuring` must precede `feat` or the longer word is split in
+# half. No trailing \b after the optional dot either: there is no word boundary between the
+# "." and the space in "feat. Akon", so `\bfeat\.?\b` matches nothing at all there.
+_CREDIT_SPLIT = re.compile(r",|&|\bfeaturing\b|\bfeat\.?|\bft\.?", re.IGNORECASE)
+
+
+def credit_parts(name: object) -> set[str]:
+    """Every name a credit might be matched by, casefolded, including the whole credit.
+
+    Applied to BOTH sides of the comparison, because the mismatch runs in either direction: a
+    session can name two artists where the library names one, and a library row can name two
+    where the session names one.
+
+    Splitting a genuine band name ("Hall & Oates") into parts that are not artists is
+    deliberate and harmless. It can only cool MORE artists than strictly necessary, and more
+    rotation is the conservative direction for a rule whose whole purpose is variety.
+    """
+    raw = str(name or "").strip()
+    if not raw:
+        return set()
+    parts = {raw.casefold()}
+    for part in _CREDIT_SPLIT.split(raw):
+        cleaned = part.strip().casefold()
+        if cleaned:
+            parts.add(cleaned)
+    return parts
+
+
 def recent_artists(events: Sequence[Mapping[str, object]], cooldown: int) -> set[str]:
-    """The artists inside the cooldown window, casefolded.
+    """Every name credited inside the cooldown window, casefolded.
 
     Casefolded because the pool's strings come from Spotify and the events' from the capture
     log; a capitalisation difference must not be allowed to defeat the rule silently.
     """
     if cooldown <= 0:
         return set()
-    return {str(e.get("artist", "")).casefold() for e in events[-cooldown:]}
+    cooled: set[str] = set()
+    for event in events[-cooldown:]:
+        cooled |= credit_parts(event.get("artist"))
+    return cooled
 
 
 def choose_next(
@@ -103,7 +141,7 @@ def choose_next(
         return None
 
     cooled = recent_artists(events, cooldown)
-    eligible = [t for t in exclude_played(pool, events) if t.artist.casefold() not in cooled]
+    eligible = [t for t in exclude_played(pool, events) if not (credit_parts(t.artist) & cooled)]
     if not eligible:
         return None
 
