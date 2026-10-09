@@ -144,18 +144,46 @@ space_basis_reset <- .space_basis_impl$reset
 WIDE <- 2.4
 FLAT <- 1.1
 
-space_layout <- function(space, n_labels = 26, min_sep = 0.095) {
+# The old default asked for 26 labels and the exclusion ellipse rejected enough that it never
+# got past 16, so the cloud was half as dense as the design intended. With the width-aware
+# ellipse below: 0.05 yields 31, 0.06 yields 27, 0.07 yields 25. Both 31 and 27 were looked at
+# on screen and both still ran "post-punk" into "synthpop" into "idm" - the extra labels all
+# land in the crowded middle, where the terms genuinely are that close together. 0.07 is the
+# first value that reads cleanly, and it is still 25 against the 16 this used to manage.
+#
+# This matters more now that the trail is clamped into the cloud instead of flying past it:
+# the labels around the dot are the only thing that gives its position a meaning.
+DEFAULT_N_LABELS <- 32
+DEFAULT_MIN_SEP <- 0.07
+
+space_layout <- function(space, n_labels = DEFAULT_N_LABELS, min_sep = DEFAULT_MIN_SEP) {
   b <- space_basis(space)
   xy <- b$xy
   span <- max(diff(range(xy[, 1])), diff(range(xy[, 2])))
-  a <- WIDE * min_sep * span
-  h <- FLAT * min_sep * span
+  h <- FLAT * min_sep * span  # one line of text: height does not depend on the label
+
+  # The exclusion half-width scales with the LABEL'S OWN LENGTH. A fixed width is wrong in
+  # both directions at once: "female vocalists" is twice the rendered width of "pop", so one
+  # ellipse sized for the average lets the long pair collide while reserving dead space around
+  # the short one. Raising the label count exposed this immediately - "female vocalists" ran
+  # straight through "melancholy" while "90s" sat alone in a clearing.
+  #
+  # A pair is checked against the SUM of its two half-widths: each label extends from its own
+  # point, so they touch when the gap closes to half_i + half_j. Written as a sum of halves
+  # rather than a mean of wholes purely because it names the geometry; the two are the same
+  # number, and swapping between them changes no output. Worth stating, because it looks like
+  # a fix and is not one.
+  tags <- unname(space$display[space$terms])
+  widths <- nchar(tags)
+  ref <- stats::median(widths)
+  half_w <- (WIDE / 2) * min_sep * span * widths / ref
 
   keep <- integer(0)
   for (i in seq_len(nrow(xy))) {
     if (length(keep) >= n_labels) break
     if (length(keep) > 0) {
-      inside <- ((xy[i, 1] - xy[keep, 1]) / a)^2 + ((xy[i, 2] - xy[keep, 2]) / h)^2
+      a_pair <- half_w[i] + half_w[keep]
+      inside <- ((xy[i, 1] - xy[keep, 1]) / a_pair)^2 + ((xy[i, 2] - xy[keep, 2]) / h)^2
       if (min(inside) < 1) next
     }
     keep <- c(keep, i)
@@ -172,7 +200,39 @@ space_layout <- function(space, n_labels = 26, min_sep = 0.095) {
 #' Project each state's vector into the same basis as the terms.
 trail_data <- function(space, layout_df, states) {
   b <- space_basis(space)
-  pts <- t(vapply(states, function(s) as.vector((s$v - b$mu) %*% b$P), numeric(2)))
+
+  # The session vector is a decayed SUM of tag vectors, so its magnitude grows without bound -
+  # measured 4.3 to 14.9 across one session - while term positions are fixed and small.
+  # Projected raw, the trail leaves the vocabulary behind: on a real 19-event session, 13 of 19
+  # points fell outside the extent of all 319 terms, in territory where no tag exists at any
+  # radius. The dot was not under-labelled out there, it was alone, and a dot in blank space
+  # says nothing about what the engine is going to play.
+  #
+  # Bounded by clamping the 2-D radius, NOT by normalising the vector first. Those two are not
+  # interchangeable and the choice is forced:
+  #
+  #   - clamping keeps a term's own vector plotting exactly on that term's label, which is the
+  #     property that makes the picture readable at all;
+  #   - normalising before centring would make the dot invariant to scale, but the `- mu` shift
+  #     means a scaled vector is not collinear with the unscaled one, so the dot would drift
+  #     off the tags it is pointing at.
+  #
+  # Readability wins. Magnitude is not information the recommender uses anyway - ranking is by
+  # cosine - so compressing it costs no decision, and weakness remains visible in the reading's
+  # shrinking bars and in the engine declining outright.
+  # The cap is the furthest TERM, not a quantile of them. At the 90th percentile the outermost
+  # tenth of the vocabulary was itself being clamped, which broke the one property that makes
+  # the plot legible: a term's own vector must land exactly on that term's label. At the max,
+  # nothing inside the cloud moves at all and only a vector that has genuinely gone beyond
+  # every tag we have a word for is pulled back - to the rim, still pointing where it pointed.
+  cap <- max(sqrt(rowSums(b$xy^2)))
+  project <- function(v) {
+    pt <- as.vector((v - b$mu) %*% b$P)
+    r <- sqrt(sum(pt^2))
+    if (r > cap) pt <- pt / r * cap
+    pt
+  }
+  pts <- t(vapply(states, function(s) project(s$v), numeric(2)))
   data.frame(
     step = seq_along(states),
     outcome = vapply(states, function(s) {
