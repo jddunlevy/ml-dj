@@ -1,16 +1,22 @@
 #' The two plots. Data in, ggplot out - nothing here reads a file or a reactive.
 
-THEMES <- list(
-  notebook       = list(bg = "#f5f1e8", surface = "#ffffff", text = "#1a1a1a",
-                        muted = "#666666", accent = "#000000"),
-  avocado        = list(bg = "#d4e3c0", surface = "#e8efd9", text = "#2d3a1f",
-                        muted = "#5a6b46", accent = "#3d5a2a"),
-  sakura         = list(bg = "#fce4ec", surface = "#fdeef3", text = "#3a1f2e",
-                        muted = "#7a4a60", accent = "#d9869f"),
-  `blood-orange` = list(bg = "#ffb380", surface = "#ffd9b3", text = "#2a0f00",
-                        muted = "#8a3a1a", accent = "#c91540"),
-  `blue-bird`    = list(bg = "#bcd4e6", surface = "#d4e2ee", text = "#3a2820",
-                        muted = "#7a5a48", accent = "#6e4030")
+# One theme, lifted token-for-token from the pitch mockup
+# (homework/individual-pitch-prototype.html), so the live app and the submitted deck read as
+# one artifact. The five light themes and the selector that chose between them are gone.
+#
+# That removal is what lets `skip` and `now` be fixed colours. The old note in theme.css was
+# right that a hardcoded highlight could not survive both a cream ground and a blood-orange
+# one - with a single dark ground that constraint does not exist, and a skip marker that must
+# carry across a lit room is worth more than portability to themes nobody is going to use.
+#
+# `skip` is brighter than the mockup's own --red (#a35c5c), which is desaturated for body
+# text on a page rather than for a 3.6pt glyph read from the back of a classroom.
+# These must stay in step with :root in www/theme.css, which paints the page chrome.
+THEME <- list(
+  bg = "#0a0c0b", surface = "#141816", text = "#eef0ec",
+  muted = "#949c96", accent = "#1ed760",
+  skip = "#ff5c5c",  # the x markers - a skip is the one event the pitch is about
+  now = "#22d3ee"    # the live position, cyan so it never reads as another skip or trail dot
 )
 
 MONO <- "mono"
@@ -54,8 +60,10 @@ reading_data <- function(space, v, n_toward = 6, n_away = 3) {
 }
 
 #' Sign is carried by value, not hue: with one accent token there is no diverging scale
-#' available, and this survives greyscale, all five themes, and a projector.
-plot_reading <- function(reading_df, th = THEMES$notebook) {
+#' available, and this survives greyscale and a projector. Deliberately NOT recoloured to the
+#' new `skip` token - these bars are terms the vector points away from, which is the lasting
+#' effect of past skips, not the skip events themselves. The x markers are the skips.
+plot_reading <- function(reading_df, th = THEME) {
   d <- reading_df
   # factor() rejects duplicate levels ("duplicated levels are not allowed"), so two term keys
   # that share a display string would crash the plot. Order/position by a de-duplicated key, but
@@ -136,18 +144,46 @@ space_basis_reset <- .space_basis_impl$reset
 WIDE <- 2.4
 FLAT <- 1.1
 
-space_layout <- function(space, n_labels = 26, min_sep = 0.095) {
+# The old default asked for 26 labels and the exclusion ellipse rejected enough that it never
+# got past 16, so the cloud was half as dense as the design intended. With the width-aware
+# ellipse below: 0.05 yields 31, 0.06 yields 27, 0.07 yields 25. Both 31 and 27 were looked at
+# on screen and both still ran "post-punk" into "synthpop" into "idm" - the extra labels all
+# land in the crowded middle, where the terms genuinely are that close together. 0.07 is the
+# first value that reads cleanly, and it is still 25 against the 16 this used to manage.
+#
+# This matters more now that the trail is clamped into the cloud instead of flying past it:
+# the labels around the dot are the only thing that gives its position a meaning.
+DEFAULT_N_LABELS <- 32
+DEFAULT_MIN_SEP <- 0.07
+
+space_layout <- function(space, n_labels = DEFAULT_N_LABELS, min_sep = DEFAULT_MIN_SEP) {
   b <- space_basis(space)
   xy <- b$xy
   span <- max(diff(range(xy[, 1])), diff(range(xy[, 2])))
-  a <- WIDE * min_sep * span
-  h <- FLAT * min_sep * span
+  h <- FLAT * min_sep * span  # one line of text: height does not depend on the label
+
+  # The exclusion half-width scales with the LABEL'S OWN LENGTH. A fixed width is wrong in
+  # both directions at once: "female vocalists" is twice the rendered width of "pop", so one
+  # ellipse sized for the average lets the long pair collide while reserving dead space around
+  # the short one. Raising the label count exposed this immediately - "female vocalists" ran
+  # straight through "melancholy" while "90s" sat alone in a clearing.
+  #
+  # A pair is checked against the SUM of its two half-widths: each label extends from its own
+  # point, so they touch when the gap closes to half_i + half_j. Written as a sum of halves
+  # rather than a mean of wholes purely because it names the geometry; the two are the same
+  # number, and swapping between them changes no output. Worth stating, because it looks like
+  # a fix and is not one.
+  tags <- unname(space$display[space$terms])
+  widths <- nchar(tags)
+  ref <- stats::median(widths)
+  half_w <- (WIDE / 2) * min_sep * span * widths / ref
 
   keep <- integer(0)
   for (i in seq_len(nrow(xy))) {
     if (length(keep) >= n_labels) break
     if (length(keep) > 0) {
-      inside <- ((xy[i, 1] - xy[keep, 1]) / a)^2 + ((xy[i, 2] - xy[keep, 2]) / h)^2
+      a_pair <- half_w[i] + half_w[keep]
+      inside <- ((xy[i, 1] - xy[keep, 1]) / a_pair)^2 + ((xy[i, 2] - xy[keep, 2]) / h)^2
       if (min(inside) < 1) next
     }
     keep <- c(keep, i)
@@ -164,7 +200,39 @@ space_layout <- function(space, n_labels = 26, min_sep = 0.095) {
 #' Project each state's vector into the same basis as the terms.
 trail_data <- function(space, layout_df, states) {
   b <- space_basis(space)
-  pts <- t(vapply(states, function(s) as.vector((s$v - b$mu) %*% b$P), numeric(2)))
+
+  # The session vector is a decayed SUM of tag vectors, so its magnitude grows without bound -
+  # measured 4.3 to 14.9 across one session - while term positions are fixed and small.
+  # Projected raw, the trail leaves the vocabulary behind: on a real 19-event session, 13 of 19
+  # points fell outside the extent of all 319 terms, in territory where no tag exists at any
+  # radius. The dot was not under-labelled out there, it was alone, and a dot in blank space
+  # says nothing about what the engine is going to play.
+  #
+  # Bounded by clamping the 2-D radius, NOT by normalising the vector first. Those two are not
+  # interchangeable and the choice is forced:
+  #
+  #   - clamping keeps a term's own vector plotting exactly on that term's label, which is the
+  #     property that makes the picture readable at all;
+  #   - normalising before centring would make the dot invariant to scale, but the `- mu` shift
+  #     means a scaled vector is not collinear with the unscaled one, so the dot would drift
+  #     off the tags it is pointing at.
+  #
+  # Readability wins. Magnitude is not information the recommender uses anyway - ranking is by
+  # cosine - so compressing it costs no decision, and weakness remains visible in the reading's
+  # shrinking bars and in the engine declining outright.
+  # The cap is the furthest TERM, not a quantile of them. At the 90th percentile the outermost
+  # tenth of the vocabulary was itself being clamped, which broke the one property that makes
+  # the plot legible: a term's own vector must land exactly on that term's label. At the max,
+  # nothing inside the cloud moves at all and only a vector that has genuinely gone beyond
+  # every tag we have a word for is pulled back - to the rim, still pointing where it pointed.
+  cap <- max(sqrt(rowSums(b$xy^2)))
+  project <- function(v) {
+    pt <- as.vector((v - b$mu) %*% b$P)
+    r <- sqrt(sum(pt^2))
+    if (r > cap) pt <- pt / r * cap
+    pt
+  }
+  pts <- t(vapply(states, function(s) project(s$v), numeric(2)))
   data.frame(
     step = seq_along(states),
     outcome = vapply(states, function(s) {
@@ -178,7 +246,7 @@ trail_data <- function(space, layout_df, states) {
 
 #' The constellation. Motion lives here; truth lives in the reading. The subtitle says so,
 #' because a 150-to-2 projection discards 148 dimensions and the audience cannot see that.
-plot_constellation <- function(layout_df, trail_df, th = THEMES$notebook) {
+plot_constellation <- function(layout_df, trail_df, th = THEME) {
   lab <- layout_df[layout_df$label, ]
   n <- nrow(trail_df)
   trail_df$alpha <- if (n > 1) seq(.3, 1, length.out = n) else 1
@@ -199,15 +267,27 @@ plot_constellation <- function(layout_df, trail_df, th = THEMES$notebook) {
                        linewidth = .45, alpha = .4) +
     ggplot2::geom_point(data = trail_df, ggplot2::aes(x, y, alpha = alpha),
                         colour = th$accent, size = 1.9) +
-    ggplot2::geom_point(data = skips, ggplot2::aes(x, y), shape = 4, colour = th$accent,
+    ggplot2::geom_point(data = skips, ggplot2::aes(x, y), shape = 4, colour = th$skip,
                         size = 3.6, stroke = 1.15) +
     ggplot2::geom_point(data = cur, ggplot2::aes(x, y), colour = th$accent, size = 4.2) +
     ggplot2::geom_point(data = cur, ggplot2::aes(x, y), colour = th$surface, size = 1.5) +
     ggplot2::geom_text(data = cur, ggplot2::aes(x, y, label = "now"), family = MONO,
-                       size = 2.8, colour = th$accent, hjust = -0.45, fontface = "bold") +
+                       size = 2.8, colour = th$now, hjust = -0.45, fontface = "bold") +
     ggplot2::scale_alpha_identity() +
-    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = .12)) +
-    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = .09)) +
+    # Equal units on both axes, gridded every 2.5. Until now the panel stretched each axis to
+    # fill its box independently, so a unit of y was drawn longer than a unit of x and the
+    # distance the vector appeared to travel depended on which direction it went. For a plot
+    # whose only job is showing how far the session moved, that is a wrong picture rather than
+    # an ugly one. coord_fixed costs some empty margin when a session is wider than it is tall;
+    # an honest aspect is worth more than a full box.
+    #
+    # Both axes get the same expansion now, because with equal scales an asymmetric one
+    # reintroduces exactly the distortion coord_fixed is here to remove.
+    ggplot2::scale_x_continuous(breaks = scales::breaks_width(2.5),
+                                expand = ggplot2::expansion(mult = .12)) +
+    ggplot2::scale_y_continuous(breaks = scales::breaks_width(2.5),
+                                expand = ggplot2::expansion(mult = .12)) +
+    ggplot2::coord_fixed(ratio = 1) +
     ggplot2::labs(title = "Session vector in tag space",
                   subtitle = paste("2-D of 150 · read the bars for what it means",
                                    "· × = skip")) +

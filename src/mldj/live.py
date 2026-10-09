@@ -93,8 +93,21 @@ def refresh(
     build_events: BuildEvents,
     build_pool: BuildPool,
     previous: list[dict[str, Any]] | None,
+    skip_pool: bool = False,
 ) -> Refresh:
-    """One pass. Derives the log, writes only what actually changed."""
+    """One pass. Derives the log, writes only what actually changed.
+
+    `skip_pool` exists because the pool rebuild is the slow half and the loop is serial: one
+    unfamiliar artist means a few dozen Last.fm round trips, and the NEXT pass cannot start
+    until they return. Measured on a demo machine that froze session.json for roughly two
+    minutes, during which every track change went unseen and the prototype showed a track that
+    had long since finished.
+
+    Skipping it costs candidate breadth and never correctness - the app re-ranks whatever pool
+    is on disk against the current vector on every render, so an out-of-date pool still
+    produces correctly ordered rows. On a stage that is the right trade; the queue write does
+    not read the candidate pool at all.
+    """
     events = build_events(log)
     if previous is not None and events == previous:
         return Refresh(events=events, session_written=False, candidates_written=False)
@@ -104,7 +117,7 @@ def refresh(
 
     write_session(out_dir / "session.json", log.stem, _label_of(log), events)
 
-    if not new_artists(previous, events):
+    if skip_pool or not new_artists(previous, events):
         return Refresh(events=events, session_written=True, candidates_written=False)
 
     write_pool(out_dir / "candidates.json", log.stem, build_pool(events))
@@ -188,6 +201,7 @@ def _run(args: argparse.Namespace) -> int:
                     build_events=build_events,
                     build_pool=build_pool,
                     previous=previous,
+                    skip_pool=args.no_candidates,
                 )
             except Exception as err:  # noqa: BLE001 - deliberate: keep watching
                 print(f"refresh failed, retrying: {err}")
@@ -214,4 +228,12 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--out", default=str(LIVE_DIR), help="where Shiny watches for JSON")
     p.add_argument("--interval-s", type=float, default=DEFAULT_INTERVAL_S)
+    p.add_argument(
+        "--no-candidates",
+        action="store_true",
+        help="never rebuild the candidate pool. The rebuild is a few dozen Last.fm round "
+        "trips and the loop is serial, so one unfamiliar artist can freeze session.json for "
+        "minutes. Use this when presenting: the queue write does not read the pool, and the "
+        "app re-ranks whatever pool is on disk against the current vector anyway.",
+    )
     p.set_defaults(handler=_run)

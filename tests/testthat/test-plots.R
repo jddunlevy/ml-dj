@@ -150,14 +150,75 @@ test_that("labelled terms clear an exclusion ellipse, not a circle", {
   # Rendered labels are far wider than they are tall, so two points separated well enough
   # vertically can still have their text run together horizontally ("female vocalists" over
   # "beautiful" did exactly this). The keep rule uses an ellipse matching that geometry.
-  a <- 2.4 * 0.095 * span
-  b <- 1.1 * 0.095 * span
+  # Derived from the real defaults, not a copy of them. This hardcoded 0.095 and started
+  # failing the moment the default moved - it was asserting against a number the
+  # implementation no longer used.
+  #
+  # The half-width is per label, scaled by its own character count, and a pair is checked
+  # against the mean of the two. A single fixed width let "female vocalists" run through
+  # "melancholy" while reserving dead space around "90s".
+  widths <- nchar(lab$tag)
+  ref <- stats::median(nchar(d$tag))
+  half_w <- (WIDE / 2) * DEFAULT_MIN_SEP * span * widths / ref
+  b <- FLAT * DEFAULT_MIN_SEP * span
   for (i in seq_len(nrow(lab))) {
     for (j in seq_len(nrow(lab))) {
       if (i >= j) next
       dx <- lab$x[i] - lab$x[j]
       dy <- lab$y[i] - lab$y[j]
+      a <- half_w[i] + half_w[j]  # each label extends from its own point: sum, not mean
       expect_gte((dx / a)^2 + (dy / b)^2, 1)
     }
   }
+})
+
+# The session vector is a decayed SUM of tag vectors, so its magnitude grows without bound
+# while term positions stay fixed and small. Projected raw it leaves the term cloud entirely:
+# measured on a real 19-event session, 13 of 19 trail points fell outside the extent of the
+# whole 319-term vocabulary, in territory where no tag exists at any radius.
+#
+# The engine ranks by cosine, which is direction only - magnitude changes nothing about which
+# track gets picked. The plot was therefore spending most of its canvas on a quantity the
+# recommender does not use, and that quantity was what pushed the dot into empty space.
+
+a_state <- function(v, outcome = "completed") {
+  list(list(v = v, history = list(list(outcome = outcome))))
+}
+
+test_that("direction still moves the point", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  ld <- space_layout(sp)
+
+  a <- trail_data(sp, ld, a_state(tag_vector(sp, "dreampop")))
+  b <- trail_data(sp, ld, a_state(tag_vector(sp, "dance")))
+
+  expect_false(isTRUE(all.equal(c(a$x, a$y), c(b$x, b$y))))
+})
+
+test_that("a zero vector does not produce NaN", {
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  tr <- trail_data(sp, space_layout(sp), list(list(v = rep(0, ncol(sp$vectors)),
+                                                   history = list())))
+
+  expect_false(any(is.na(tr$x)))
+  expect_false(any(is.na(tr$y)))
+})
+
+test_that("a vector with real accumulated magnitude still plots among the tags", {
+  # The whole point: it must land where the things it is compared against live. Clamped, not
+  # normalised - see trail_data. A term's own vector is unaffected, which is asserted above by
+  # "trail_data projects in the same coordinate system as the term backdrop".
+  skip_if_not(file.exists(SPACE_PATH), "space.json is gitignored")
+  sp <- load_space(SPACE_PATH)
+  ld <- space_layout(sp)
+  big <- tag_vector(sp, c("dreampop", "shoegaze", "indie")) * 25
+
+  tr <- trail_data(sp, ld, a_state(big))
+
+  expect_gte(tr$x, min(ld$x) - 1)
+  expect_lte(tr$x, max(ld$x) + 1)
+  expect_gte(tr$y, min(ld$y) - 1)
+  expect_lte(tr$y, max(ld$y) + 1)
 })
