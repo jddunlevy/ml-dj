@@ -42,10 +42,10 @@ DEFAULT_COOLDOWN = 5  # Phase 0 measured the DJ's own rotation rule at exactly t
 
 # The floor's job is to refuse a DEGENERATE vector, not to demand a strong one. Calibrated
 # against two real captured sessions rather than guessed: a healthy moment scores 0.28-0.96,
-# and a vector wrecked by three or more consecutive skips scores 0.008-0.10 (the abandoned
-# Hall & Oates moment in the Phase 3 plan scored 0.061). 0.15 sits an order of magnitude above
-# the degenerate band and well below the usable one. An earlier 0.25 was set from two data
-# points and put a legitimate 0.279 moment one hundredth above refusing itself.
+# and a vector wrecked by three or more consecutive skips scores 0.008-0.10 (the moment the
+# Phase 3 plan abandoned, a third consecutive skip, scored 0.061). 0.15 sits an order of
+# magnitude above the degenerate band and well below the usable one. An earlier 0.25 was set
+# from two data points and put a legitimate 0.279 moment a hundredth above refusing itself.
 DEFAULT_MIN_SCORE = 0.15
 DEFAULT_EPSILON = 0.0
 
@@ -70,15 +70,15 @@ class Delivery:
     reason: str  # queued | dry-run | duplicate
 
 
-# Capture records the credit exactly as Spotify gives it - "Stevie Nicks, Don Henley" - while
-# the library row for the same track is "Stevie Nicks". Comparing those whole strings lets a
+# Capture records the credit exactly as Spotify gives it - "Marla Quinn, Theo Vance" - while
+# the library row for the same track is "Marla Quinn". Comparing those whole strings lets a
 # multi-artist credit walk straight through artist rotation. Observed live on 2026-10-08: the
 # engine picked the track that was playing at that moment, because neither the cooldown nor
 # exclude_played could see that the two names referred to the same artist.
 #
 # Alternation is ordered, so `featuring` must precede `feat` or the longer word is split in
 # half. No trailing \b after the optional dot either: there is no word boundary between the
-# "." and the space in "feat. Akon", so `\bfeat\.?\b` matches nothing at all there.
+# "." and the space in "feat. Rell", so `\bfeat\.?\b` matches nothing at all there.
 _CREDIT_SPLIT = re.compile(r",|&|\bfeaturing\b|\bfeat\.?|\bft\.?", re.IGNORECASE)
 
 
@@ -89,7 +89,7 @@ def credit_parts(name: object) -> set[str]:
     session can name two artists where the library names one, and a library row can name two
     where the session names one.
 
-    Splitting a genuine band name ("Hall & Oates") into parts that are not artists is
+    Splitting a genuine band name ("Birch & Holloway") into parts that are not artists is
     deliberate and harmless. It can only cool MORE artists than strictly necessary, and more
     rotation is the conservative direction for a rule whose whole purpose is variety.
     """

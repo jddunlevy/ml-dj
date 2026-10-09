@@ -7,9 +7,9 @@ test_that("a queued pick reads back with its numbers", {
   tmp <- tempfile(fileext = ".json")
   on.exit(unlink(tmp))
   writeLines('{
-    "uri": "spotify:track:4kZOi9K2i06Syi2DiSfEqT",
-    "artist": "Duran Duran",
-    "title": "The Chauffeur - 2009 Remaster",
+    "uri": "spotify:track:0000000000fixture01",
+    "artist": "Night Cartography",
+    "title": "Slow Transit - 2009 Remaster",
     "score": 0.6919,
     "rank": 7,
     "pool_size": 4154,
@@ -17,7 +17,7 @@ test_that("a queued pick reads back with its numbers", {
   }', tmp)
 
   q <- read_queued(tmp)
-  expect_equal(q$artist, "Duran Duran")
+  expect_equal(q$artist, "Night Cartography")
   expect_equal(q$rank, 7)
   expect_equal(q$pool_size, 4154)
   expect_false(q$novel)

@@ -60,8 +60,8 @@ def event(artist, title, outcome="completed", tags=("indie",), earliness=None):
 
 
 def test_recent_artists_is_casefolded_so_capitalisation_cannot_defeat_the_cooldown():
-    events = [event("Pet Shop Boys", "Rent")]
-    assert recent_artists(events, 5) == {"pet shop boys"}
+    events = [event("Paper Lanterns", "Ceiling Fan")]
+    assert recent_artists(events, 5) == {"paper lanterns"}
 
 
 def test_recent_artists_looks_back_only_the_cooldown_window():
@@ -74,27 +74,28 @@ def test_a_cooldown_of_zero_cools_nothing():
 
 
 def test_each_credited_artist_is_cooled_separately():
-    """Capture records the whole Spotify credit - "Stevie Nicks, Don Henley" - while the
-    library row is "Stevie Nicks". Comparing the strings whole lets a multi-artist credit walk
+    """Capture records the whole Spotify credit - "Marla Quinn, Theo Vance" - while the
+    library row is "Marla Quinn". Comparing the strings whole lets a multi-artist credit walk
     straight through artist rotation, which is how the engine came to queue the track that was
     playing at that moment. Observed live on 2026-10-08."""
-    events = [event("Stevie Nicks, Don Henley", "Leather and Lace")]
+    events = [event("Marla Quinn, Theo Vance", "Glass Harbour")]
 
     cooled = recent_artists(events, 5)
 
-    assert "stevie nicks" in cooled
-    assert "don henley" in cooled
-    assert "stevie nicks, don henley" in cooled  # the whole credit still matches itself
+    assert "marla quinn" in cooled
+    assert "theo vance" in cooled
+    assert "marla quinn, theo vance" in cooled  # the whole credit still matches itself
 
 
 def test_an_ampersand_credit_is_split_too():
-    assert recent_artists([event("Hall & Oates", "x")], 5) >= {"hall", "oates", "hall & oates"}
+    cooled = recent_artists([event("Birch & Holloway", "x")], 5)
+    assert cooled >= {"birch", "holloway", "birch & holloway"}
 
 
 def test_a_featured_credit_is_split():
-    cooled = recent_artists([event("Gwen Stefani feat. Akon", "x")], 5)
-    assert "gwen stefani" in cooled
-    assert "akon" in cooled
+    cooled = recent_artists([event("Nadia Croft feat. Rell", "x")], 5)
+    assert "nadia croft" in cooled
+    assert "rell" in cooled
 
 
 def test_splitting_does_not_invent_empty_artists():
@@ -104,10 +105,10 @@ def test_splitting_does_not_invent_empty_artists():
 def test_choose_next_will_not_queue_a_co_credited_artist_who_just_played():
     """The whole bug, end to end: the library row names one artist, the session names two."""
     pool = [
-        track("spotify:track:1", "Stevie Nicks", "Leather and Lace", tags=("indie",)),
+        track("spotify:track:1", "Marla Quinn", "Glass Harbour", tags=("indie",)),
         track("spotify:track:2", "Someone Else", "Another Song", tags=("indie",)),
     ]
-    events = [event("Stevie Nicks, Don Henley", "Leather and Lace", tags=("indie",))]
+    events = [event("Marla Quinn, Theo Vance", "Glass Harbour", tags=("indie",))]
 
     pick = choose_next(a_space(), events, pool, cooldown=5, min_score=0.0)
 
@@ -182,7 +183,7 @@ def test_choose_next_returns_none_when_the_cooldown_empties_the_pool():
 
 
 def a_pick(uri="spotify:track:1") -> Pick:
-    return Pick(uri=uri, artist="Duran Duran", title="The Chauffeur", score=0.69,
+    return Pick(uri=uri, artist="Night Cartography", title="Slow Transit", score=0.69,
                 rank=7, novel=False, pool_size=4154)
 
 
